@@ -4,8 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>To-do-ADM</title>
-    <!-- Biblioteca de Gráficos (Chart.js) para as estatísticas -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         /* --- GERAL E TEMA --- */
         :root {
@@ -20,7 +18,6 @@
             --status-aberto: #ffc107;
             --status-andamento: #0d6efd;
             --status-finalizado: #198754;
-            --status-bloqueado: #dc3545;
             --status-aguardando: #6f42c1;
 
             --priority-alta: #dc3545;
@@ -51,7 +48,12 @@
             align-items: center;
             justify-content: space-between;
             z-index: 1000;
-            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
             gap: 15px;
         }
 
@@ -65,7 +67,6 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            flex-wrap: wrap;
         }
 
         .menu-button, .menu-item select, .menu-item input[type="text"] {
@@ -83,15 +84,36 @@
             border-color: var(--primary-accent);
         }
         
-        #newTicketBtn {
-            background-color: var(--primary-accent);
-            border-color: var(--primary-accent);
-            color: white;
-            font-weight: bold;
+        /* --- Dropdown Menu --- */
+        .dropdown {
+            position: relative;
+            display: inline-block;
         }
-        #newTicketBtn:hover {
-            background-color: var(--primary-accent-hover);
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: var(--surface-color);
+            min-width: 160px;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            z-index: 1;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            overflow: hidden;
         }
+        .dropdown-content .dropdown-item {
+            color: var(--font-color);
+            padding: 12px 16px;
+            text-decoration: none;
+            display: block;
+            background: none;
+            border: none;
+            width: 100%;
+            text-align: left;
+            cursor: pointer;
+        }
+        .dropdown-content .dropdown-item:hover { background-color: var(--surface-hover-color); }
+        .show { display: block; }
+
 
         /* --- PAINEL PRINCIPAL (KANBAN) --- */
         main {
@@ -142,7 +164,6 @@
         #column-Aberto { border-color: var(--status-aberto); }
         #column-Andamento { border-color: var(--status-andamento); }
         #column-Finalizado { border-color: var(--status-finalizado); }
-        #column-Bloqueado { border-color: var(--status-bloqueado); }
         #column-Aguardando { border-color: var(--status-aguardando); }
 
         .tickets-container {
@@ -202,7 +223,7 @@
             margin-top: 10px;
         }
         .ticket-deadline.overdue {
-            color: var(--status-bloqueado);
+            color: var(--priority-alta);
             font-weight: bold;
             animation: pulse 1.5s infinite;
         }
@@ -272,7 +293,7 @@
         .form-buttons { margin-top: 25px; display: flex; justify-content: flex-end; gap: 10px; }
         .form-buttons button { padding: 10px 20px; border-radius: 5px; border: none; cursor: pointer; font-weight: bold; }
         .btn-save { background-color: var(--primary-accent); color: white; }
-        .btn-delete { background-color: var(--status-bloqueado); color: white; }
+        .btn-delete { background-color: var(--priority-alta); color: white; }
         .btn-cancel { background-color: var(--surface-hover-color); color: var(--font-color); }
         
         /* Histórico e Anexos no Modal */
@@ -291,6 +312,30 @@
         .modal-extra-section li:last-child { border-bottom: none; }
         .modal-extra-section a { color: var(--primary-accent); }
 
+        /* Botão Adicionar Flutuante (FAB) */
+        .fab {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            background-color: var(--primary-accent);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            font-size: 30px;
+            line-height: 60px;
+            text-align: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            cursor: pointer;
+            z-index: 1001;
+            transition: background-color 0.2s, transform 0.2s;
+        }
+        .fab:hover {
+            background-color: var(--primary-accent-hover);
+            transform: scale(1.05);
+        }
+
         /* --- ANIMAÇÕES E RESPONSIVIDADE --- */
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
@@ -299,11 +344,17 @@
             header {
                 height: auto;
                 padding: 10px;
+                flex-wrap: wrap;
                 justify-content: center;
-                text-align: center;
             }
-            .logo { width: 100%; margin-bottom: 10px; }
-            .menu { justify-content: center; width: 100%; }
+            .header-left {
+                width: 100%;
+                justify-content: center;
+            }
+            .menu {
+                width: 100%;
+                justify-content: center;
+            }
             body { padding-top: 120px; }
             main { flex-direction: column; }
             .status-column { flex: 1 1 auto; max-height: none; }
@@ -315,20 +366,22 @@
 
     <!-- CABEÇALHO FIXO -->
     <header>
-        <div class="logo">To-do-ADM</div>
+        <div class="header-left">
+            <div class="logo">To-do-ADM</div>
+            <div class="dropdown">
+                <button id="fileMenuBtn" class="menu-button">Arquivo ▾</button>
+                <div id="fileMenuDropdown" class="dropdown-content">
+                    <input type="file" id="importFile" accept=".json,.csv" style="display: none;">
+                    <button id="importBtn" class="dropdown-item">Importar...</button>
+                    <select id="exportSelect" class="dropdown-item">
+                        <option value="" disabled selected>Exportar como...</option>
+                        <option value="json">JSON</option>
+                        <option value="csv">CSV</option>
+                    </select>
+                </div>
+            </div>
+        </div>
         <div class="menu">
-            <button id="newTicketBtn" class="menu-button">Novo Ticket</button>
-            <div class="menu-item">
-                <input type="file" id="importFile" accept=".json,.csv" style="display: none;">
-                <button id="importBtn" class="menu-button">Importar</button>
-            </div>
-            <div class="menu-item">
-                <select id="exportSelect" class="menu-button">
-                    <option value="" disabled selected>Exportar</option>
-                    <option value="json">Exportar JSON</option>
-                    <option value="csv">Exportar CSV</option>
-                </select>
-            </div>
             <div class="menu-item">
                 <input type="text" id="searchInput" placeholder="Buscar...">
             </div>
@@ -338,7 +391,6 @@
                     <option value="Aberto">Aberto</option>
                     <option value="Andamento">Em Andamento</option>
                     <option value="Finalizado">Finalizado</option>
-                    <option value="Bloqueado">Bloqueado</option>
                     <option value="Aguardando">Aguardando</option>
                 </select>
             </div>
@@ -347,7 +399,6 @@
                     <input type="checkbox" id="showCompleted" checked> Mostrar Finalizados
                 </label>
             </div>
-            <button id="statsBtn" class="menu-button">📊 Estatísticas</button>
         </div>
     </header>
 
@@ -355,6 +406,9 @@
     <main id="kanbanBoard">
         <!-- Colunas de Status serão geradas pelo JavaScript -->
     </main>
+
+    <!-- BOTÃO ADICIONAR FLUTUANTE -->
+    <button id="addTicketFab" class="fab">+</button>
 
     <!-- MODAL PARA NOVO/EDITAR TICKET -->
     <div id="ticketModal" class="modal">
@@ -421,15 +475,6 @@
         </div>
     </div>
 
-    <!-- MODAL PARA ESTATÍSTICAS -->
-    <div id="statsModal" class="modal">
-        <div class="modal-content">
-            <span class="close-button">&times;</span>
-            <h2>Estatísticas dos Tickets</h2>
-            <canvas id="statsChart"></canvas>
-        </div>
-    </div>
-
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
@@ -439,14 +484,13 @@
             const searchInput = document.getElementById('searchInput');
             const filterStatus = document.getElementById('filterStatus');
             const showCompletedCheckbox = document.getElementById('showCompleted');
+            const addTicketFab = document.getElementById('addTicketFab');
 
             let tickets = [];
-            let chartInstance = null;
-            const statuses = ['Aberto', 'Andamento', 'Aguardando', 'Bloqueado', 'Finalizado'];
+            const statuses = ['Aberto', 'Andamento', 'Aguardando', 'Finalizado'];
             const statusColors = {
                 Aberto: 'var(--status-aberto)', Andamento: 'var(--status-andamento)',
-                Finalizado: 'var(--status-finalizado)', Bloqueado: 'var(--status-bloqueado)',
-                Aguardando: 'var(--status-aguardando)',
+                Finalizado: 'var(--status-finalizado)', Aguardando: 'var(--status-aguardando)',
             };
             const priorityColors = {
                 Alta: 'var(--priority-alta)', Media: 'var(--priority-media)', Baixa: 'var(--priority-baixa)',
@@ -454,13 +498,13 @@
 
             // --- FUNÇÕES DE LÓGICA DE DADOS (LocalStorage, Logs) ---
             const loadData = () => {
-                const data = localStorage.getItem('todo-adm-tickets-v2');
+                const data = localStorage.getItem('todo-adm-tickets-v3'); // Nova chave para evitar conflitos
                 tickets = data ? JSON.parse(data) : [];
                 populateDatalists();
             };
 
             const saveData = () => {
-                localStorage.setItem('todo-adm-tickets-v2', JSON.stringify(tickets));
+                localStorage.setItem('todo-adm-tickets-v3', JSON.stringify(tickets));
                 populateDatalists();
             };
             
@@ -471,7 +515,7 @@
             };
 
             const populateDatalists = () => {
-                const responsibles = [...new Set(tickets.map(t => t.responsible))];
+                const responsibles = [...new Set(tickets.map(t => t.responsible).filter(Boolean))];
                 const list = document.getElementById('responsibles-list');
                 list.innerHTML = responsibles.map(r => `<option value="${r}">`).join('');
             };
@@ -561,23 +605,17 @@
                 });
             };
 
-            // --- FUNÇÕES DE MODAL (Genérica) ---
+            // --- FUNÇÕES DE MODAL ---
             const openModal = (modalId, ticketId = null) => {
                 const modal = document.getElementById(modalId);
                 if (modalId === 'ticketModal') {
                     setupTicketModal(ticketId);
-                } else if (modalId === 'statsModal') {
-                    setupStatsModal();
                 }
                 modal.style.display = 'block';
             };
 
             const closeModal = (modalId) => {
                 document.getElementById(modalId).style.display = 'none';
-                if (modalId === 'statsModal' && chartInstance) {
-                    chartInstance.destroy();
-                    chartInstance = null;
-                }
             };
 
             const setupTicketModal = (ticketId) => {
@@ -611,7 +649,7 @@
             
             const renderAttachmentInModal = (url) => {
                 const div = document.createElement('div');
-                div.innerHTML = `<a href="${url}" target="_blank">${url}</a> <button type="button">&times;</button>`;
+                div.innerHTML = `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a> <button type="button">&times;</button>`;
                 document.getElementById('attachmentsContainer').appendChild(div);
                 div.querySelector('button').addEventListener('click', () => div.remove());
             };
@@ -627,48 +665,6 @@
                 });
                 historyContainer.style.display = 'block';
             };
-
-            const setupStatsModal = () => {
-                const ctx = document.getElementById('statsChart').getContext('2d');
-                const statusCounts = statuses.map(status => tickets.filter(t => t.status === status).length);
-                
-                if (chartInstance) chartInstance.destroy();
-
-                chartInstance = new Chart(ctx, {
-                    type: 'doughnut',
-                    data: {
-                        labels: statuses,
-                        datasets: [{
-                            label: 'Tickets por Status',
-                            data: statusCounts,
-                            backgroundColor: Object.values(statusColors),
-                            borderColor: varToHex(getComputedStyle(document.body).getPropertyValue('--surface-color')),
-                            borderWidth: 3
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        plugins: {
-                            legend: {
-                                position: 'top',
-                                labels: { color: varToHex(getComputedStyle(document.body).getPropertyValue('--font-color')) }
-                            },
-                            title: {
-                                display: true,
-                                text: 'Distribuição de Tickets',
-                                color: varToHex(getComputedStyle(document.body).getPropertyValue('--font-color'))
-                            }
-                        }
-                    }
-                });
-            };
-            
-            // Helper para converter var(--color) para HEX para o Chart.js
-            const varToHex = (color) => {
-                // Esta é uma simplificação. Para cores complexas, seria necessário um parser mais robusto.
-                // Funciona para cores HEX diretas como #121212.
-                return color.trim();
-            }
 
             // --- MANIPULADORES DE EVENTOS (Handlers) ---
             const handleFormSubmit = (e) => {
@@ -780,11 +776,23 @@
                 if (format === 'json') {
                     content = JSON.stringify(tickets, null, 2);
                     mimeType = 'application/json';
-                } else {
+                } else if (format === 'csv') {
                     const headers = Object.keys(tickets[0]).join(',');
-                    const rows = tickets.map(t => Object.values(t).map(v => `"${JSON.stringify(v)}"`).join(','));
+                    const rows = tickets.map(t => {
+                        return Object.values(t).map(val => {
+                            let value = '';
+                            if (typeof val === 'string') {
+                                value = val.replace(/"/g, '""');
+                            } else if (typeof val === 'object' && val !== null) {
+                                value = JSON.stringify(val).replace(/"/g, '""');
+                            } else {
+                                value = String(val);
+                            }
+                            return `"${value}"`;
+                        }).join(',');
+                    });
                     content = `${headers}\n${rows.join('\n')}`;
-                    mimeType = 'text/csv';
+                    mimeType = 'text/csv;charset=utf-8;';
                 }
                 const a = document.createElement('a');
                 a.href = URL.createObjectURL(new Blob([content], { type: mimeType }));
@@ -799,8 +807,11 @@
                 const reader = new FileReader();
                 reader.onload = e => {
                     try {
-                        const importedTickets = file.name.endsWith('.json') ? JSON.parse(e.target.result) : []; // CSV import simplificado
-                        if (!Array.isArray(importedTickets)) throw new Error('Formato inválido.');
+                        if (!file.name.endsWith('.json')) {
+                            throw new Error('Formato de arquivo não suportado. Use JSON.');
+                        }
+                        const importedTickets = JSON.parse(e.target.result);
+                        if (!Array.isArray(importedTickets)) throw new Error('O arquivo JSON não contém um array de tickets válido.');
                         
                         const merge = confirm('Deseja mesclar com os tickets existentes? "Cancelar" irá substituir.');
                         if (merge) {
@@ -814,23 +825,32 @@
                         alert('Dados importados com sucesso!');
                     } catch (error) {
                         alert('Erro ao importar arquivo: ' + error.message);
+                    } finally {
+                        event.target.value = ''; // Limpa o input
                     }
                 };
                 reader.readAsText(file);
             };
+            
+            // --- MENU DROPDOWN ---
+            const fileMenuBtn = document.getElementById('fileMenuBtn');
+            const fileMenuDropdown = document.getElementById('fileMenuDropdown');
+            fileMenuBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                fileMenuDropdown.classList.toggle('show');
+            });
+            window.addEventListener('click', (e) => {
+                if (!fileMenuBtn.contains(e.target)) {
+                    fileMenuDropdown.classList.remove('show');
+                }
+            });
+
 
             // --- INICIALIZAÇÃO E EVENT LISTENERS ---
-            document.getElementById('newTicketBtn').addEventListener('click', () => openModal('ticketModal'));
-            document.getElementById('statsBtn').addEventListener('click', () => openModal('statsModal'));
-
-            document.querySelectorAll('.modal .close-button').forEach(btn => {
-                const modalId = btn.closest('.modal').id;
-                btn.addEventListener('click', () => closeModal(modalId));
-            });
-            document.querySelectorAll('.modal .btn-cancel').forEach(btn => {
-                const modalId = btn.closest('.modal').id;
-                btn.addEventListener('click', () => closeModal(modalId));
-            });
+            addTicketFab.addEventListener('click', () => openModal('ticketModal'));
+            
+            document.querySelector('#ticketModal .close-button').addEventListener('click', () => closeModal('ticketModal'));
+            document.querySelector('#ticketModal .btn-cancel').addEventListener('click', () => closeModal('ticketModal'));
             window.addEventListener('click', e => {
                 if (e.target.classList.contains('modal')) closeModal(e.target.id);
             });
@@ -842,8 +862,11 @@
             document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importFile').click());
             document.getElementById('importFile').addEventListener('change', handleImport);
             document.getElementById('exportSelect').addEventListener('change', e => {
-                if(e.target.value) handleExport(e.target.value);
-                e.target.value = '';
+                if(e.target.value) {
+                    handleExport(e.target.value);
+                    e.target.value = ''; // Reseta o select
+                    fileMenuDropdown.classList.remove('show');
+                }
             });
 
             [searchInput, filterStatus, showCompletedCheckbox].forEach(el => {
