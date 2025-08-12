@@ -337,8 +337,35 @@
         .ticket-priority { padding: 3px 8px; border-radius: 10px; font-size: 0.8em; color: white; font-weight: bold; }
         .ticket-content { margin-bottom: 10px; }
         .ticket-content strong { font-size: 1.1em; }
-        .ticket-content p { margin: 4px 0; font-size: 0.9em; color: #ccc; }
         .ticket-deadline.overdue { color: var(--priority-alta); font-weight: bold; animation: pulse-red 1.5s infinite; }
+
+        .ticket-requirements .tags-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 8px;
+            max-height: 50px;
+            overflow: hidden;
+            transition: max-height 0.3s ease-in-out;
+        }
+        .ticket-requirements .tags-container.expanded {
+            max-height: 500px;
+        }
+        .req-tag {
+            background-color: var(--border-color);
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.85em;
+        }
+        .toggle-reqs {
+            background: none;
+            border: none;
+            color: var(--primary-accent);
+            cursor: pointer;
+            font-size: 0.8em;
+            margin-top: 5px;
+            padding: 0;
+        }
 
         /* --- MODAL --- */
         .modal {
@@ -364,6 +391,24 @@
             color: var(--font-color); border-radius: 4px; box-sizing: border-box; transition: border-color 0.2s;
         }
         .form-field input:focus, .form-field select:focus, .form-field textarea:focus { outline: none; border-color: var(--primary-accent); }
+        .checkbox-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            background-color: var(--bg-color);
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+        }
+        .checkbox-group label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+        .checkbox-group input {
+            width: auto;
+            margin-right: 10px;
+        }
         .form-buttons { margin-top: 25px; display: flex; justify-content: flex-end; gap: 10px; }
         .form-buttons button { padding: 10px 20px; border-radius: 5px; border: none; cursor: pointer; font-weight: bold; }
         .btn-save { background-color: var(--primary-accent); color: white; }
@@ -509,8 +554,16 @@
                         <input type="date" id="ticketDeadline" required>
                     </div>
                     <div class="form-field full-width">
-                        <label for="ticketNotes">Observações</label>
-                        <textarea id="ticketNotes" rows="3"></textarea>
+                        <label for="ticketRequirements">Requerimento (tags separadas por vírgula)</label>
+                        <textarea id="ticketRequirements" rows="3"></textarea>
+                    </div>
+                    <div class="form-field full-width">
+                        <label>Status de Comunicação</label>
+                        <div class="checkbox-group">
+                            <label><input type="checkbox" id="ticketAviseiRegiana"> Avisei a Regiana</label>
+                            <label><input type="checkbox" id="ticketComuniqueiAluno"> Comuniquei o aluno</label>
+                            <label><input type="checkbox" id="ticketAguardandoRetorno"> Aguardando retorno do aluno</label>
+                        </div>
                     </div>
                 </div>
                 <div class="form-buttons">
@@ -552,14 +605,14 @@
 
             // --- FUNÇÕES DE LÓGICA DE DADOS ---
             const loadData = () => {
-                const data = localStorage.getItem('todo-adm-tickets-v6');
+                const data = localStorage.getItem('todo-adm-tickets-v7');
                 googleApiKey = localStorage.getItem('todo-adm-google-api-key') || '';
                 tickets = data ? JSON.parse(data) : [];
                 renderNotifications();
             };
 
             const saveData = () => {
-                localStorage.setItem('todo-adm-tickets-v6', JSON.stringify(tickets));
+                localStorage.setItem('todo-adm-tickets-v7', JSON.stringify(tickets));
                 renderNotifications();
             };
             
@@ -622,6 +675,21 @@
 
                 if (nearingDeadline) card.classList.add('nearing-deadline');
                 
+                let requirementsHTML = '';
+                if (ticket.requirements) {
+                    const tags = ticket.requirements.split(',').map(tag => tag.trim()).filter(tag => tag);
+                    if (tags.length > 0) {
+                        requirementsHTML = `
+                            <div class="ticket-requirements">
+                                <div class="tags-container">
+                                    ${tags.map(tag => `<span class="req-tag">${tag}</span>`).join('')}
+                                </div>
+                                ${tags.length > 2 ? '<button class="toggle-reqs">Mostrar mais...</button>' : ''}
+                            </div>
+                        `;
+                    }
+                }
+
                 card.innerHTML = `
                     <div class="ticket-header">
                         <span class="ticket-id">#${ticket.id.toString().substring(0, 6)}</span>
@@ -634,7 +702,7 @@
                     </div>
                     <div class="ticket-content">
                         <strong>${ticket.title}</strong>
-                        <p>${ticket.notes || ''}</p>
+                        ${requirementsHTML}
                     </div>
                     <div class="ticket-footer">
                         <span>Início: ${new Date(ticket.startDate).toLocaleDateString()}</span>
@@ -644,6 +712,17 @@
                 
                 card.querySelector('.card-status-select').addEventListener('click', (e) => e.stopPropagation());
                 card.querySelector('.card-status-select').addEventListener('change', handleQuickStatusChange);
+                
+                const toggleBtn = card.querySelector('.toggle-reqs');
+                if (toggleBtn) {
+                    toggleBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const container = e.target.previousElementSibling;
+                        container.classList.toggle('expanded');
+                        e.target.textContent = container.classList.contains('expanded') ? 'Mostrar menos' : 'Mostrar mais...';
+                    });
+                }
+
                 card.addEventListener('click', () => openModal('ticketModal', ticket.id));
                 return card;
             };
@@ -664,7 +743,7 @@
                         alert(`Erro na busca com IA: ${error.message}`);
                         baseTickets = tickets.filter(ticket => 
                             (ticket.title && ticket.title.toLowerCase().includes(searchTerm)) ||
-                            (ticket.notes && ticket.notes.toLowerCase().includes(searchTerm))
+                            (ticket.requirements && ticket.requirements.toLowerCase().includes(searchTerm))
                         );
                     } finally {
                         searchInput.disabled = false;
@@ -673,7 +752,7 @@
                 } else if (searchTerm) {
                     baseTickets = tickets.filter(ticket => 
                         (ticket.title && ticket.title.toLowerCase().includes(searchTerm)) ||
-                        (ticket.notes && ticket.notes.toLowerCase().includes(searchTerm))
+                        (ticket.requirements && ticket.requirements.toLowerCase().includes(searchTerm))
                     );
                 }
 
@@ -691,7 +770,7 @@
                 const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${googleApiKey}`;
                 
                 let ticketsToSearch = showCompletedCheckbox.checked ? tickets : tickets.filter(t => t.status !== 'Finalizado');
-                const simplifiedTickets = ticketsToSearch.map(({ id, title, notes, priority, deadline }) => ({ id, title, notes, priority, deadline }));
+                const simplifiedTickets = ticketsToSearch.map(({ id, title, requirements, priority, deadline }) => ({ id, title, requirements, priority, deadline }));
 
                 const prompt = `Você é um assistente de kanban. Analise as tarefas JSON. A data atual é ${new Date().toLocaleDateString()}. Pesquisa do usuário: "${query}". Retorne um array JSON com os IDs das tarefas mais relevantes. Lista: ${JSON.stringify(simplifiedTickets)}. Responda apenas com o array de IDs.`;
 
@@ -797,7 +876,13 @@
                     document.getElementById('modalTitle').textContent = 'Editar Ticket';
                     Object.keys(ticket).forEach(key => {
                         const el = document.getElementById(`ticket${key.charAt(0).toUpperCase() + key.slice(1)}`);
-                        if (el) el.value = ticket[key];
+                        if (el) {
+                           if (el.type === 'checkbox') {
+                               el.checked = ticket[key];
+                           } else {
+                               el.value = ticket[key];
+                           }
+                        }
                     });
                     document.getElementById('ticketId').value = ticket.id;
                     if (ticket.history?.length > 0) renderHistoryInModal(ticket.history);
@@ -831,7 +916,10 @@
                     startDate: document.getElementById('ticketStartDate').value,
                     deadline: document.getElementById('ticketDeadline').value,
                     priority: document.getElementById('ticketPriority').value,
-                    notes: document.getElementById('ticketNotes').value.trim(),
+                    requirements: document.getElementById('ticketRequirements').value.trim(),
+                    aviseiRegiana: document.getElementById('ticketAviseiRegiana').checked,
+                    comuniqueiAluno: document.getElementById('ticketComuniqueiAluno').checked,
+                    aguardandoRetorno: document.getElementById('ticketAguardandoRetorno').checked,
                     history: originalTicket?.history || []
                 };
 
