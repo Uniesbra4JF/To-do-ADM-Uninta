@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>To-do-ADM</title>
+    <!-- Biblioteca de Gráficos (Chart.js) para as estatísticas -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* --- GERAL E TEMA --- */
+        :root {
+            --bg-color: #121212;
+            --surface-color: #1e1e1e;
+            --surface-hover-color: #2a2a2a;
+            --font-color: #e0e0e0;
+            --border-color: #333;
+            --primary-accent: #0d6efd;
+            --primary-accent-hover: #0b5ed7;
+            
+            --status-aberto: #ffc107;
+            --status-andamento: #0d6efd;
+            --status-finalizado: #198754;
+            --status-bloqueado: #dc3545;
+            --status-aguardando: #6f42c1;
+
+            --priority-alta: #dc3545;
+            --priority-media: #ffc107;
+            --priority-baixa: #198754;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--font-color);
+            margin: 0;
+            padding-top: 60px; /* Espaço para o cabeçalho fixo */
+            overflow-x: hidden;
+        }
+
+        /* --- CABEÇALHO E MENU SUPERIOR --- */
+        header {
+            background-color: var(--surface-color);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0 20px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 1000;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .logo {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: var(--primary-accent);
+        }
+
+        .menu {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .menu-button, .menu-item select, .menu-item input[type="text"] {
+            background-color: var(--surface-color);
+            color: var(--font-color);
+            border: 1px solid var(--border-color);
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.2s, border-color 0.2s;
+            font-size: 14px;
+        }
+        .menu-button:hover, .menu-item select:hover { 
+            background-color: var(--surface-hover-color);
+            border-color: var(--primary-accent);
+        }
+        
+        #newTicketBtn {
+            background-color: var(--primary-accent);
+            border-color: var(--primary-accent);
+            color: white;
+            font-weight: bold;
+        }
+        #newTicketBtn:hover {
+            background-color: var(--primary-accent-hover);
+        }
+
+        /* --- PAINEL PRINCIPAL (KANBAN) --- */
+        main {
+            display: flex;
+            gap: 15px;
+            padding: 20px;
+            overflow-x: auto;
+            min-height: calc(100vh - 60px);
+            align-items: flex-start;
+        }
+
+        .status-column {
+            flex: 0 0 320px;
+            background-color: var(--surface-color);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            max-height: calc(100vh - 100px);
+            border-top: 4px solid;
+            transition: box-shadow 0.3s;
+        }
+        .status-column:hover {
+            box-shadow: 0 0 20px -5px var(--border-color);
+        }
+
+        .column-header {
+            padding: 10px 15px;
+            font-weight: bold;
+            font-size: 1.1em;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .ticket-count {
+            background-color: var(--surface-hover-color);
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+        
+        #column-Aberto { border-color: var(--status-aberto); }
+        #column-Andamento { border-color: var(--status-andamento); }
+        #column-Finalizado { border-color: var(--status-finalizado); }
+        #column-Bloqueado { border-color: var(--status-bloqueado); }
+        #column-Aguardando { border-color: var(--status-aguardando); }
+
+        .tickets-container {
+            overflow-y: auto;
+            flex-grow: 1;
+            padding: 10px;
+        }
+        
+        /* --- CARTÃO DE TICKET --- */
+        .ticket-card {
+            background-color: var(--surface-hover-color);
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-left: 5px solid;
+            cursor: grab;
+            transition: transform 0.2s, box-shadow 0.2s;
+            animation: fadeIn 0.5s ease;
+        }
+
+        .ticket-card.dragging {
+            opacity: 0.5;
+            transform: rotate(3deg);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+        }
+        .ticket-card:hover {
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            transform: translateY(-2px);
+        }
+        
+        .ticket-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .ticket-id { font-size: 0.8em; color: #aaa; }
+        .ticket-priority {
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 0.8em;
+            color: white;
+            font-weight: bold;
+        }
+
+        .ticket-content { margin-bottom: 10px; }
+        .ticket-content strong { font-size: 1.1em; }
+        .ticket-content p { margin: 4px 0; font-size: 0.9em; color: #ccc; }
+        .ticket-content p strong { font-size: 0.9em; color: var(--font-color); }
+
+        .ticket-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.8em;
+            color: #aaa;
+            margin-top: 10px;
+        }
+        .ticket-deadline.overdue {
+            color: var(--status-bloqueado);
+            font-weight: bold;
+            animation: pulse 1.5s infinite;
+        }
+
+        .ticket-attachments a {
+            color: var(--primary-accent);
+            text-decoration: none;
+            font-size: 0.9em;
+        }
+        .ticket-attachments a:hover { text-decoration: underline; }
+
+        /* --- MODAL --- */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.8);
+            animation: fadeIn 0.3s;
+        }
+        .modal-content {
+            background-color: var(--surface-color);
+            margin: 5% auto;
+            padding: 25px;
+            border: 1px solid var(--border-color);
+            width: 90%;
+            max-width: 700px;
+            border-radius: 8px;
+            position: relative;
+            box-shadow: 0 5px 25px rgba(0,0,0,0.5);
+        }
+        .close-button {
+            color: #aaa;
+            position: absolute;
+            top: 15px;
+            right: 25px;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        .close-button:hover { color: white; }
+        .modal-content h2 { margin-top: 0; border-bottom: 1px solid var(--border-color); padding-bottom: 15px;}
+        
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .form-field { display: flex; flex-direction: column; }
+        .form-field.full-width { grid-column: 1 / -1; }
+        .form-field label { margin-bottom: 8px; font-size: 0.9em; color: #ccc; }
+        .form-field input, .form-field select, .form-field textarea {
+            width: 100%;
+            padding: 10px;
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
+            color: var(--font-color);
+            border-radius: 4px;
+            box-sizing: border-box;
+            transition: border-color 0.2s;
+        }
+        .form-field input:focus, .form-field select:focus, .form-field textarea:focus {
+            outline: none;
+            border-color: var(--primary-accent);
+        }
+        .form-buttons { margin-top: 25px; display: flex; justify-content: flex-end; gap: 10px; }
+        .form-buttons button { padding: 10px 20px; border-radius: 5px; border: none; cursor: pointer; font-weight: bold; }
+        .btn-save { background-color: var(--primary-accent); color: white; }
+        .btn-delete { background-color: var(--status-bloqueado); color: white; }
+        .btn-cancel { background-color: var(--surface-hover-color); color: var(--font-color); }
+        
+        /* Histórico e Anexos no Modal */
+        .modal-extra-section {
+            margin-top: 20px;
+            max-height: 150px;
+            overflow-y: auto;
+            padding: 15px;
+            background: var(--bg-color);
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+        }
+        .modal-extra-section h4 { margin: 0 0 10px 0; }
+        .modal-extra-section ul { list-style: none; padding: 0; margin: 0; }
+        .modal-extra-section li { font-size: 0.8em; color: #ccc; padding: 5px 0; border-bottom: 1px solid var(--border-color); }
+        .modal-extra-section li:last-child { border-bottom: none; }
+        .modal-extra-section a { color: var(--primary-accent); }
+
+        /* --- ANIMAÇÕES E RESPONSIVIDADE --- */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+
+        @media (max-width: 900px) {
+            header {
+                height: auto;
+                padding: 10px;
+                justify-content: center;
+                text-align: center;
+            }
+            .logo { width: 100%; margin-bottom: 10px; }
+            .menu { justify-content: center; width: 100%; }
+            body { padding-top: 120px; }
+            main { flex-direction: column; }
+            .status-column { flex: 1 1 auto; max-height: none; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- CABEÇALHO FIXO -->
+    <header>
+        <div class="logo">To-do-ADM</div>
+        <div class="menu">
+            <button id="newTicketBtn" class="menu-button">Novo Ticket</button>
+            <div class="menu-item">
+                <input type="file" id="importFile" accept=".json,.csv" style="display: none;">
+                <button id="importBtn" class="menu-button">Importar</button>
+            </div>
+            <div class="menu-item">
+                <select id="exportSelect" class="menu-button">
+                    <option value="" disabled selected>Exportar</option>
+                    <option value="json">Exportar JSON</option>
+                    <option value="csv">Exportar CSV</option>
+                </select>
+            </div>
+            <div class="menu-item">
+                <input type="text" id="searchInput" placeholder="Buscar...">
+            </div>
+            <div class="menu-item">
+                <select id="filterStatus">
+                    <option value="">Todos Status</option>
+                    <option value="Aberto">Aberto</option>
+                    <option value="Andamento">Em Andamento</option>
+                    <option value="Finalizado">Finalizado</option>
+                    <option value="Bloqueado">Bloqueado</option>
+                    <option value="Aguardando">Aguardando</option>
+                </select>
+            </div>
+             <div class="menu-item">
+                <label style="font-size: 0.8em; margin-right: 5px; display: flex; align-items: center;">
+                    <input type="checkbox" id="showCompleted" checked> Mostrar Finalizados
+                </label>
+            </div>
+            <button id="statsBtn" class="menu-button">📊 Estatísticas</button>
+        </div>
+    </header>
+
+    <!-- PAINEL KANBAN -->
+    <main id="kanbanBoard">
+        <!-- Colunas de Status serão geradas pelo JavaScript -->
+    </main>
+
+    <!-- MODAL PARA NOVO/EDITAR TICKET -->
+    <div id="ticketModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <h2 id="modalTitle">Novo Ticket</h2>
+            <form id="ticketForm">
+                <input type="hidden" id="ticketId">
+                <div class="form-grid">
+                    <div class="form-field full-width">
+                        <label for="ticketTitle">Título do Ticket</label>
+                        <input type="text" id="ticketTitle" required>
+                    </div>
+                    <div class="form-field">
+                        <label for="ticketResponsible">Responsável</label>
+                        <input type="text" id="ticketResponsible" required list="responsibles-list">
+                        <datalist id="responsibles-list"></datalist>
+                    </div>
+                    <div class="form-field">
+                        <label for="ticketStatus">Status</label>
+                        <select id="ticketStatus" required>
+                            <!-- Options geradas via JS -->
+                        </select>
+                    </div>
+                     <div class="form-field">
+                        <label for="ticketStartDate">Data de Início</label>
+                        <input type="date" id="ticketStartDate" required>
+                    </div>
+                    <div class="form-field">
+                        <label for="ticketDeadline">Prazo Final</label>
+                        <input type="date" id="ticketDeadline" required>
+                    </div>
+                    <div class="form-field full-width">
+                        <label for="ticketPriority">Prioridade</label>
+                        <select id="ticketPriority" required>
+                            <option value="Baixa">Baixa</option>
+                            <option value="Media">Média</option>
+                            <option value="Alta">Alta</option>
+                        </select>
+                    </div>
+                    <div class="form-field full-width">
+                        <label for="ticketNotes">Observações</label>
+                        <textarea id="ticketNotes" rows="3"></textarea>
+                    </div>
+                    <!-- Funcionalidade Extra: Anexos (Links) -->
+                    <div class="form-field full-width">
+                        <label>Links Anexados</label>
+                        <div id="attachmentsContainer"></div>
+                        <input type="url" id="newAttachmentInput" placeholder="Cole um link e pressione Enter">
+                    </div>
+                </div>
+
+                <div class="form-buttons">
+                    <button type="button" id="deleteTicketBtn" class="btn-delete" style="display:none;">Excluir</button>
+                    <button type="button" class="btn-cancel">Cancelar</button>
+                    <button type="submit" class="btn-save">Salvar</button>
+                </div>
+            </form>
+            <!-- Histórico -->
+            <div id="ticket-history" class="modal-extra-section" style="display:none;">
+                <h4>Histórico de Alterações</h4>
+                <ul id="history-list"></ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL PARA ESTATÍSTICAS -->
+    <div id="statsModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <h2>Estatísticas dos Tickets</h2>
+            <canvas id="statsChart"></canvas>
+        </div>
+    </div>
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- VARIÁVEIS E CONSTANTES GLOBAIS ---
+            const kanbanBoard = document.getElementById('kanbanBoard');
+            const ticketForm = document.getElementById('ticketForm');
+            const searchInput = document.getElementById('searchInput');
+            const filterStatus = document.getElementById('filterStatus');
+            const showCompletedCheckbox = document.getElementById('showCompleted');
+
+            let tickets = [];
+            let chartInstance = null;
+            const statuses = ['Aberto', 'Andamento', 'Aguardando', 'Bloqueado', 'Finalizado'];
+            const statusColors = {
+                Aberto: 'var(--status-aberto)', Andamento: 'var(--status-andamento)',
+                Finalizado: 'var(--status-finalizado)', Bloqueado: 'var(--status-bloqueado)',
+                Aguardando: 'var(--status-aguardando)',
+            };
+            const priorityColors = {
+                Alta: 'var(--priority-alta)', Media: 'var(--priority-media)', Baixa: 'var(--priority-baixa)',
+            };
+
+            // --- FUNÇÕES DE LÓGICA DE DADOS (LocalStorage, Logs) ---
+            const loadData = () => {
+                const data = localStorage.getItem('todo-adm-tickets-v2');
+                tickets = data ? JSON.parse(data) : [];
+                populateDatalists();
+            };
+
+            const saveData = () => {
+                localStorage.setItem('todo-adm-tickets-v2', JSON.stringify(tickets));
+                populateDatalists();
+            };
+            
+            const addLogEntry = (ticket, action, user = "Usuário") => {
+                if (!ticket.history) ticket.history = [];
+                ticket.history.unshift({ action, user, timestamp: new Date().toISOString() });
+                if (ticket.history.length > 20) ticket.history.pop();
+            };
+
+            const populateDatalists = () => {
+                const responsibles = [...new Set(tickets.map(t => t.responsible))];
+                const list = document.getElementById('responsibles-list');
+                list.innerHTML = responsibles.map(r => `<option value="${r}">`).join('');
+            };
+
+            // --- FUNÇÕES DE RENDERIZAÇÃO NA UI ---
+            const renderBoard = () => {
+                kanbanBoard.innerHTML = '';
+                const filteredTickets = getFilteredTickets();
+
+                statuses.forEach(status => {
+                    if (!showCompletedCheckbox.checked && status === 'Finalizado') return;
+                    
+                    const column = document.createElement('div');
+                    column.className = 'status-column';
+                    column.id = `column-${status.replace(/\s+/g, '')}`;
+                    column.dataset.status = status;
+                    column.style.borderColor = statusColors[status];
+
+                    const ticketsInColumn = filteredTickets.filter(t => t.status === status);
+
+                    column.innerHTML = `
+                        <div class="column-header">
+                            <span>${status}</span>
+                            <span class="ticket-count">${ticketsInColumn.length}</span>
+                        </div>
+                        <div class="tickets-container"></div>
+                    `;
+                    kanbanBoard.appendChild(column);
+                    
+                    const ticketsContainer = column.querySelector('.tickets-container');
+                    ticketsInColumn.forEach(ticket => {
+                        const ticketCard = createTicketCard(ticket);
+                        ticketsContainer.appendChild(ticketCard);
+                    });
+                });
+                setupDragAndDrop();
+            };
+            
+            const createTicketCard = (ticket) => {
+                const card = document.createElement('div');
+                card.className = 'ticket-card';
+                card.draggable = true;
+                card.dataset.id = ticket.id;
+                card.style.borderColor = statusColors[ticket.status];
+
+                const isOverdue = new Date(ticket.deadline) < new Date() && ticket.status !== 'Finalizado';
+                
+                let attachmentsHTML = '';
+                if (ticket.attachments && ticket.attachments.length > 0) {
+                    attachmentsHTML = `<div class="ticket-attachments">
+                        <p><strong>Anexos:</strong> <a href="${ticket.attachments[0]}" target="_blank" rel="noopener noreferrer">${ticket.attachments[0].substring(0, 30)}...</a></p>
+                    </div>`;
+                }
+
+                card.innerHTML = `
+                    <div class="ticket-header">
+                        <span class="ticket-id">#${ticket.id.toString().substring(0, 6)}</span>
+                        <span class="ticket-priority" style="background-color: ${priorityColors[ticket.priority]}">${ticket.priority}</span>
+                    </div>
+                    <div class="ticket-content">
+                        <strong>${ticket.title}</strong>
+                        <p><strong>Resp:</strong> ${ticket.responsible}</p>
+                        <p>${ticket.notes || ''}</p>
+                    </div>
+                    ${attachmentsHTML}
+                    <div class="ticket-footer">
+                        <span>Início: ${new Date(ticket.startDate).toLocaleDateString()}</span>
+                        <span class="ticket-deadline ${isOverdue ? 'overdue' : ''}">Prazo: ${new Date(ticket.deadline).toLocaleDateString()}</span>
+                    </div>
+                `;
+                card.addEventListener('click', () => openModal('ticketModal', ticket.id));
+                return card;
+            };
+
+            const getFilteredTickets = () => {
+                const searchTerm = searchInput.value.toLowerCase();
+                const statusFilter = filterStatus.value;
+                
+                return tickets.filter(ticket => {
+                    const matchesSearch = searchTerm === '' ||
+                        Object.values(ticket).some(val => 
+                            String(val).toLowerCase().includes(searchTerm)
+                        );
+                    const matchesStatus = statusFilter === '' || ticket.status === statusFilter;
+                    const matchesCompleted = showCompletedCheckbox.checked || ticket.status !== 'Finalizado';
+                    return matchesSearch && matchesStatus && matchesCompleted;
+                });
+            };
+
+            // --- FUNÇÕES DE MODAL (Genérica) ---
+            const openModal = (modalId, ticketId = null) => {
+                const modal = document.getElementById(modalId);
+                if (modalId === 'ticketModal') {
+                    setupTicketModal(ticketId);
+                } else if (modalId === 'statsModal') {
+                    setupStatsModal();
+                }
+                modal.style.display = 'block';
+            };
+
+            const closeModal = (modalId) => {
+                document.getElementById(modalId).style.display = 'none';
+                if (modalId === 'statsModal' && chartInstance) {
+                    chartInstance.destroy();
+                    chartInstance = null;
+                }
+            };
+
+            const setupTicketModal = (ticketId) => {
+                ticketForm.reset();
+                document.getElementById('attachmentsContainer').innerHTML = '';
+                document.getElementById('ticket-history').style.display = 'none';
+                
+                const statusSelect = document.getElementById('ticketStatus');
+                statusSelect.innerHTML = statuses.map(s => `<option value="${s}">${s}</option>`).join('');
+
+                if (ticketId) {
+                    const ticket = tickets.find(t => t.id === ticketId);
+                    document.getElementById('modalTitle').textContent = 'Editar Ticket';
+                    Object.keys(ticket).forEach(key => {
+                        const element = document.getElementById(`ticket${key.charAt(0).toUpperCase() + key.slice(1)}`);
+                        if (element) element.value = ticket[key];
+                    });
+                    document.getElementById('ticketId').value = ticket.id;
+                    
+                    if(ticket.attachments) ticket.attachments.forEach(renderAttachmentInModal);
+                    if(ticket.history && ticket.history.length > 0) renderHistoryInModal(ticket.history);
+
+                    document.getElementById('deleteTicketBtn').style.display = 'inline-block';
+                } else {
+                    document.getElementById('modalTitle').textContent = 'Novo Ticket';
+                    document.getElementById('ticketId').value = '';
+                    document.getElementById('ticketStartDate').value = new Date().toISOString().split('T')[0];
+                    document.getElementById('deleteTicketBtn').style.display = 'none';
+                }
+            };
+            
+            const renderAttachmentInModal = (url) => {
+                const div = document.createElement('div');
+                div.innerHTML = `<a href="${url}" target="_blank">${url}</a> <button type="button">&times;</button>`;
+                document.getElementById('attachmentsContainer').appendChild(div);
+                div.querySelector('button').addEventListener('click', () => div.remove());
+            };
+
+            const renderHistoryInModal = (history) => {
+                const historyContainer = document.getElementById('ticket-history');
+                const historyList = document.getElementById('history-list');
+                historyList.innerHTML = '';
+                history.forEach(log => {
+                    const li = document.createElement('li');
+                    li.textContent = `${new Date(log.timestamp).toLocaleString()}: ${log.action} (por ${log.user})`;
+                    historyList.appendChild(li);
+                });
+                historyContainer.style.display = 'block';
+            };
+
+            const setupStatsModal = () => {
+                const ctx = document.getElementById('statsChart').getContext('2d');
+                const statusCounts = statuses.map(status => tickets.filter(t => t.status === status).length);
+                
+                if (chartInstance) chartInstance.destroy();
+
+                chartInstance = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: statuses,
+                        datasets: [{
+                            label: 'Tickets por Status',
+                            data: statusCounts,
+                            backgroundColor: Object.values(statusColors),
+                            borderColor: varToHex(getComputedStyle(document.body).getPropertyValue('--surface-color')),
+                            borderWidth: 3
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                                labels: { color: varToHex(getComputedStyle(document.body).getPropertyValue('--font-color')) }
+                            },
+                            title: {
+                                display: true,
+                                text: 'Distribuição de Tickets',
+                                color: varToHex(getComputedStyle(document.body).getPropertyValue('--font-color'))
+                            }
+                        }
+                    }
+                });
+            };
+            
+            // Helper para converter var(--color) para HEX para o Chart.js
+            const varToHex = (color) => {
+                // Esta é uma simplificação. Para cores complexas, seria necessário um parser mais robusto.
+                // Funciona para cores HEX diretas como #121212.
+                return color.trim();
+            }
+
+            // --- MANIPULADORES DE EVENTOS (Handlers) ---
+            const handleFormSubmit = (e) => {
+                e.preventDefault();
+                const id = document.getElementById('ticketId').value;
+                const originalTicket = id ? { ...tickets.find(t => t.id === id) } : null;
+                
+                const attachments = Array.from(document.querySelectorAll('#attachmentsContainer a')).map(a => a.href);
+
+                const ticketData = {
+                    id: id || Date.now().toString(),
+                    title: document.getElementById('ticketTitle').value.trim(),
+                    responsible: document.getElementById('ticketResponsible').value.trim(),
+                    status: document.getElementById('ticketStatus').value,
+                    startDate: document.getElementById('ticketStartDate').value,
+                    deadline: document.getElementById('ticketDeadline').value,
+                    priority: document.getElementById('ticketPriority').value,
+                    notes: document.getElementById('ticketNotes').value.trim(),
+                    attachments: attachments,
+                    history: originalTicket ? originalTicket.history : []
+                };
+
+                if (id) {
+                    const index = tickets.findIndex(t => t.id === id);
+                    const changes = getChanges(originalTicket, ticketData);
+                    if (changes) addLogEntry(ticketData, `Ticket editado: ${changes}`);
+                    tickets[index] = ticketData;
+                } else {
+                    addLogEntry(ticketData, 'Ticket criado.');
+                    tickets.push(ticketData);
+                }
+
+                saveData();
+                renderBoard();
+                closeModal('ticketModal');
+            };
+            
+            const getChanges = (oldT, newT) => {
+                let changes = [];
+                for (const key in newT) {
+                    if (key !== 'history' && JSON.stringify(oldT[key]) !== JSON.stringify(newT[key])) {
+                        changes.push(`${key} alterado`);
+                    }
+                }
+                return changes.join(', ');
+            }
+
+            const handleDeleteTicket = () => {
+                if (confirm('Tem certeza que deseja excluir este ticket? Esta ação não pode ser desfeita.')) {
+                    const id = document.getElementById('ticketId').value;
+                    tickets = tickets.filter(t => t.id !== id);
+                    saveData();
+                    renderBoard();
+                    closeModal('ticketModal');
+                }
+            };
+            
+            const handleNewAttachment = (e) => {
+                if (e.key === 'Enter' && e.target.value.trim() !== '') {
+                    e.preventDefault();
+                    try {
+                        new URL(e.target.value); // Valida a URL
+                        renderAttachmentInModal(e.target.value.trim());
+                        e.target.value = '';
+                    } catch (_) {
+                        alert('Por favor, insira um link válido.');
+                    }
+                }
+            };
+
+            // --- DRAG AND DROP ---
+            const setupDragAndDrop = () => {
+                document.querySelectorAll('.ticket-card').forEach(card => {
+                    card.addEventListener('dragstart', e => e.target.classList.add('dragging'));
+                    card.addEventListener('dragend', e => e.target.classList.remove('dragging'));
+                });
+
+                document.querySelectorAll('.status-column').forEach(column => {
+                    column.addEventListener('dragover', e => {
+                        e.preventDefault();
+                        const dragging = document.querySelector('.dragging');
+                        if (dragging) column.querySelector('.tickets-container').appendChild(dragging);
+                    });
+
+                    column.addEventListener('drop', e => {
+                        e.preventDefault();
+                        const cardId = document.querySelector('.dragging')?.dataset.id;
+                        if (!cardId) return;
+                        const newStatus = column.dataset.status;
+                        const ticket = tickets.find(t => t.id === cardId);
+                        
+                        if (ticket.status !== newStatus) {
+                            addLogEntry(ticket, `Status movido de "${ticket.status}" para "${newStatus}"`);
+                            ticket.status = newStatus;
+                            saveData();
+                            renderBoard();
+                        }
+                    });
+                });
+            };
+            
+            // --- IMPORT/EXPORT ---
+            const handleExport = (format) => {
+                if (tickets.length === 0) return alert('Nenhum ticket para exportar.');
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                const filename = `todo-adm-backup-${timestamp}.${format}`;
+                let content, mimeType;
+
+                if (format === 'json') {
+                    content = JSON.stringify(tickets, null, 2);
+                    mimeType = 'application/json';
+                } else {
+                    const headers = Object.keys(tickets[0]).join(',');
+                    const rows = tickets.map(t => Object.values(t).map(v => `"${JSON.stringify(v)}"`).join(','));
+                    content = `${headers}\n${rows.join('\n')}`;
+                    mimeType = 'text/csv';
+                }
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(new Blob([content], { type: mimeType }));
+                a.download = filename;
+                a.click();
+                URL.revokeObjectURL(a.href);
+            };
+
+            const handleImport = (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = e => {
+                    try {
+                        const importedTickets = file.name.endsWith('.json') ? JSON.parse(e.target.result) : []; // CSV import simplificado
+                        if (!Array.isArray(importedTickets)) throw new Error('Formato inválido.');
+                        
+                        const merge = confirm('Deseja mesclar com os tickets existentes? "Cancelar" irá substituir.');
+                        if (merge) {
+                            const existingIds = new Set(tickets.map(t => t.id));
+                            tickets.push(...importedTickets.filter(t => !existingIds.has(t.id)));
+                        } else {
+                            tickets = importedTickets;
+                        }
+                        saveData();
+                        renderBoard();
+                        alert('Dados importados com sucesso!');
+                    } catch (error) {
+                        alert('Erro ao importar arquivo: ' + error.message);
+                    }
+                };
+                reader.readAsText(file);
+            };
+
+            // --- INICIALIZAÇÃO E EVENT LISTENERS ---
+            document.getElementById('newTicketBtn').addEventListener('click', () => openModal('ticketModal'));
+            document.getElementById('statsBtn').addEventListener('click', () => openModal('statsModal'));
+
+            document.querySelectorAll('.modal .close-button').forEach(btn => {
+                const modalId = btn.closest('.modal').id;
+                btn.addEventListener('click', () => closeModal(modalId));
+            });
+            document.querySelectorAll('.modal .btn-cancel').forEach(btn => {
+                const modalId = btn.closest('.modal').id;
+                btn.addEventListener('click', () => closeModal(modalId));
+            });
+            window.addEventListener('click', e => {
+                if (e.target.classList.contains('modal')) closeModal(e.target.id);
+            });
+
+            ticketForm.addEventListener('submit', handleFormSubmit);
+            document.getElementById('deleteTicketBtn').addEventListener('click', handleDeleteTicket);
+            document.getElementById('newAttachmentInput').addEventListener('keydown', handleNewAttachment);
+            
+            document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importFile').click());
+            document.getElementById('importFile').addEventListener('change', handleImport);
+            document.getElementById('exportSelect').addEventListener('change', e => {
+                if(e.target.value) handleExport(e.target.value);
+                e.target.value = '';
+            });
+
+            [searchInput, filterStatus, showCompletedCheckbox].forEach(el => {
+                el.addEventListener('input', renderBoard);
+                el.addEventListener('change', renderBoard);
+            });
+
+            loadData();
+            renderBoard();
+        });
+    </script>
+</body>
+</html>
