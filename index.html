@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>To-do-ADM</title>
+    <title>To-do-ADM com IA</title>
     <style>
         /* --- GERAL E TEMA --- */
         :root {
@@ -23,6 +23,11 @@
             --priority-alta: #dc3545;
             --priority-media: #ffc107;
             --priority-baixa: #198754;
+
+            --google-blue: #4285F4;
+            --google-red: #DB4437;
+            --google-yellow: #F4B400;
+            --google-green: #0F9D58;
         }
 
         body {
@@ -51,7 +56,7 @@
             gap: 15px;
         }
 
-        .header-left {
+        .header-left, .header-right {
             display: flex;
             align-items: center;
             gap: 15px;
@@ -61,12 +66,6 @@
             font-size: 1.5em;
             font-weight: bold;
             color: var(--primary-accent);
-        }
-
-        .menu {
-            display: flex;
-            align-items: center;
-            gap: 10px;
         }
 
         .menu-button, .menu-item select, .menu-item input[type="text"] {
@@ -93,12 +92,13 @@
             display: none;
             position: absolute;
             background-color: var(--surface-color);
-            min-width: 160px;
+            min-width: 180px;
             box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
             z-index: 1;
             border-radius: 6px;
             border: 1px solid var(--border-color);
             overflow: hidden;
+            right: 0; /* Alinha o dropdown de configurações à direita */
         }
         .dropdown-content .dropdown-item {
             color: var(--font-color);
@@ -114,6 +114,108 @@
         .dropdown-content .dropdown-item:hover { background-color: var(--surface-hover-color); }
         .show { display: block; }
 
+        /* Notificações */
+        #notificationBtn {
+            position: relative;
+        }
+        #notification-count {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background-color: var(--priority-alta);
+            color: white;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            font-size: 10px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid var(--surface-color);
+        }
+        #notification-list {
+            max-height: 400px;
+            overflow-y: auto;
+            min-width: 300px;
+        }
+        .notification-item {
+            padding: 10px;
+            border-bottom: 1px solid var(--border-color);
+            cursor: pointer;
+        }
+        .notification-item:last-child {
+            border-bottom: none;
+        }
+        .notification-item:hover {
+            background-color: var(--surface-hover-color);
+        }
+        .notification-item p {
+            margin: 0 0 5px 0;
+            font-size: 0.9em;
+        }
+        .notification-item small {
+            color: #aaa;
+        }
+        .notification-item select {
+            width: 100%;
+            margin-top: 5px;
+        }
+        
+        /* --- Pesquisa com IA --- */
+        .search-container {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        #searchInput.ai-active {
+            border-color: transparent;
+            background-image: linear-gradient(var(--surface-color), var(--surface-color)), 
+                              radial-gradient(circle at top left, var(--google-blue), var(--google-green), var(--google-yellow), var(--google-red));
+            background-origin: border-box;
+            background-clip: padding-box, border-box;
+            animation: bg-spin 3s linear infinite;
+        }
+        #searchMode {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 40px;
+            height: 20px;
+            background-color: var(--border-color);
+            border-radius: 10px;
+            position: relative;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        #searchMode::before {
+            content: 'IA';
+            color: #000;
+            font-size: 10px;
+            font-weight: bold;
+            position: absolute;
+            left: 20px;
+            top: 2px;
+        }
+        #searchMode::after {
+            content: '';
+            width: 16px;
+            height: 16px;
+            background-color: white;
+            border-radius: 50%;
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            transition: transform 0.3s;
+        }
+        #searchMode:checked {
+            background-color: var(--google-blue);
+        }
+        #searchMode:checked::before {
+            content: '';
+        }
+        #searchMode:checked::after {
+            transform: translateX(20px);
+        }
 
         /* --- PAINEL PRINCIPAL (KANBAN) --- */
         main {
@@ -183,11 +285,13 @@
             transition: transform 0.2s, box-shadow 0.2s;
             animation: fadeIn 0.5s ease;
         }
-
+        .ticket-card.nearing-deadline {
+            box-shadow: 0 0 15px var(--status-aberto);
+            animation: pulse-yellow 2s infinite;
+        }
         .ticket-card.dragging {
             opacity: 0.5;
             transform: rotate(3deg);
-            box-shadow: 0 8px 20px rgba(0,0,0,0.5);
         }
         .ticket-card:hover {
             box-shadow: 0 4px 15px rgba(0,0,0,0.3);
@@ -200,74 +304,53 @@
             align-items: center;
             margin-bottom: 10px;
         }
-        .ticket-id { font-size: 0.8em; color: #aaa; }
-        .ticket-priority {
-            padding: 3px 8px;
-            border-radius: 10px;
-            font-size: 0.8em;
-            color: white;
-            font-weight: bold;
+        
+        .ticket-header-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
-        .ticket-content { margin-bottom: 10px; }
-        .ticket-content strong { font-size: 1.1em; }
-        .ticket-content p { margin: 4px 0; font-size: 0.9em; color: #ccc; }
-        .ticket-content p strong { font-size: 0.9em; color: var(--font-color); }
+        .card-status-select {
+            background-color: var(--surface-color);
+            color: var(--font-color);
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            padding: 2px 5px;
+            font-size: 0.8em;
+            cursor: pointer;
+        }
+        .card-status-select:hover {
+            border-color: var(--primary-accent);
+        }
 
         .ticket-footer {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            margin-top: 10px;
             font-size: 0.8em;
             color: #aaa;
-            margin-top: 10px;
         }
-        .ticket-deadline.overdue {
-            color: var(--priority-alta);
-            font-weight: bold;
-            animation: pulse 1.5s infinite;
-        }
-
-        .ticket-attachments a {
-            color: var(--primary-accent);
-            text-decoration: none;
-            font-size: 0.9em;
-        }
-        .ticket-attachments a:hover { text-decoration: underline; }
+        
+        .ticket-id { font-size: 0.8em; color: #aaa; }
+        .ticket-priority { padding: 3px 8px; border-radius: 10px; font-size: 0.8em; color: white; font-weight: bold; }
+        .ticket-content { margin-bottom: 10px; }
+        .ticket-content strong { font-size: 1.1em; }
+        .ticket-content p { margin: 4px 0; font-size: 0.9em; color: #ccc; }
+        .ticket-deadline.overdue { color: var(--priority-alta); font-weight: bold; animation: pulse-red 1.5s infinite; }
 
         /* --- MODAL --- */
         .modal {
-            display: none;
-            position: fixed;
-            z-index: 2000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-            background-color: rgba(0,0,0,0.8);
-            animation: fadeIn 0.3s;
+            display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%;
+            overflow: auto; background-color: rgba(0,0,0,0.8); animation: fadeIn 0.3s;
         }
         .modal-content {
-            background-color: var(--surface-color);
-            margin: 5% auto;
-            padding: 25px;
-            border: 1px solid var(--border-color);
-            width: 90%;
-            max-width: 700px;
-            border-radius: 8px;
-            position: relative;
-            box-shadow: 0 5px 25px rgba(0,0,0,0.5);
+            background-color: var(--surface-color); margin: 5% auto; padding: 25px; border: 1px solid var(--border-color);
+            width: 90%; max-width: 700px; border-radius: 8px; position: relative; box-shadow: 0 5px 25px rgba(0,0,0,0.5);
         }
         .close-button {
-            color: #aaa;
-            position: absolute;
-            top: 15px;
-            right: 25px;
-            font-size: 28px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: color 0.2s;
+            color: #aaa; position: absolute; top: 15px; right: 25px; font-size: 28px; font-weight: bold; cursor: pointer; transition: color 0.2s;
         }
         .close-button:hover { color: white; }
         .modal-content h2 { margin-top: 0; border-bottom: 1px solid var(--border-color); padding-bottom: 15px;}
@@ -277,84 +360,53 @@
         .form-field.full-width { grid-column: 1 / -1; }
         .form-field label { margin-bottom: 8px; font-size: 0.9em; color: #ccc; }
         .form-field input, .form-field select, .form-field textarea {
-            width: 100%;
-            padding: 10px;
-            background-color: var(--bg-color);
-            border: 1px solid var(--border-color);
-            color: var(--font-color);
-            border-radius: 4px;
-            box-sizing: border-box;
-            transition: border-color 0.2s;
+            width: 100%; padding: 10px; background-color: var(--bg-color); border: 1px solid var(--border-color);
+            color: var(--font-color); border-radius: 4px; box-sizing: border-box; transition: border-color 0.2s;
         }
-        .form-field input:focus, .form-field select:focus, .form-field textarea:focus {
-            outline: none;
-            border-color: var(--primary-accent);
-        }
+        .form-field input:focus, .form-field select:focus, .form-field textarea:focus { outline: none; border-color: var(--primary-accent); }
         .form-buttons { margin-top: 25px; display: flex; justify-content: flex-end; gap: 10px; }
         .form-buttons button { padding: 10px 20px; border-radius: 5px; border: none; cursor: pointer; font-weight: bold; }
         .btn-save { background-color: var(--primary-accent); color: white; }
         .btn-delete { background-color: var(--priority-alta); color: white; }
         .btn-cancel { background-color: var(--surface-hover-color); color: var(--font-color); }
         
-        /* Histórico e Anexos no Modal */
+        /* Histórico no Modal */
         .modal-extra-section {
-            margin-top: 20px;
-            max-height: 150px;
-            overflow-y: auto;
-            padding: 15px;
-            background: var(--bg-color);
-            border-radius: 4px;
-            border: 1px solid var(--border-color);
+            margin-top: 20px; max-height: 150px; overflow-y: auto; padding: 15px; background: var(--bg-color);
+            border-radius: 4px; border: 1px solid var(--border-color);
         }
         .modal-extra-section h4 { margin: 0 0 10px 0; }
         .modal-extra-section ul { list-style: none; padding: 0; margin: 0; }
         .modal-extra-section li { font-size: 0.8em; color: #ccc; padding: 5px 0; border-bottom: 1px solid var(--border-color); }
         .modal-extra-section li:last-child { border-bottom: none; }
-        .modal-extra-section a { color: var(--primary-accent); }
 
         /* Botão Adicionar Flutuante (FAB) */
         .fab {
-            position: fixed;
-            bottom: 30px;
-            right: 30px;
-            width: 60px;
-            height: 60px;
-            background-color: var(--primary-accent);
-            color: white;
-            border: none;
-            border-radius: 50%;
-            font-size: 30px;
-            line-height: 60px;
-            text-align: center;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-            cursor: pointer;
-            z-index: 1001;
-            transition: background-color 0.2s, transform 0.2s;
+            position: fixed; bottom: 30px; right: 30px; width: 60px; height: 60px;
+            background-color: var(--primary-accent); color: white; border: none; border-radius: 50%;
+            font-size: 30px; line-height: 60px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            cursor: pointer; z-index: 1001; transition: background-color 0.2s, transform 0.2s;
         }
-        .fab:hover {
-            background-color: var(--primary-accent-hover);
-            transform: scale(1.05);
-        }
+        .fab:hover { background-color: var(--primary-accent-hover); transform: scale(1.05); }
 
         /* --- ANIMAÇÕES E RESPONSIVIDADE --- */
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+        @keyframes pulse-red { 0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); } 100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); } }
+        @keyframes pulse-yellow { 0% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(255, 193, 7, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0); } }
+        @keyframes bg-spin { to { --border-angle: 360deg; } }
+        @keyframes flash {
+            0% { background-color: var(--primary-accent); }
+            100% { background-color: var(--surface-hover-color); }
+        }
+        .flash {
+            animation: flash 1s ease-out;
+        }
+        
+        @property --border-angle { syntax: "<angle>"; inherits: true; initial-value: 0deg; }
 
         @media (max-width: 900px) {
-            header {
-                height: auto;
-                padding: 10px;
-                flex-wrap: wrap;
-                justify-content: center;
-            }
-            .header-left {
-                width: 100%;
-                justify-content: center;
-            }
-            .menu {
-                width: 100%;
-                justify-content: center;
-            }
+            header { height: auto; padding: 10px; flex-wrap: wrap; justify-content: center; }
+            .header-left, .header-right { width: 100%; justify-content: center; }
             body { padding-top: 120px; }
             main { flex-direction: column; }
             .status-column { flex: 1 1 auto; max-height: none; }
@@ -369,10 +421,10 @@
         <div class="header-left">
             <div class="logo">To-do-ADM</div>
             <div class="dropdown">
-                <button id="fileMenuBtn" class="menu-button">Arquivo ▾</button>
-                <div id="fileMenuDropdown" class="dropdown-content">
-                    <input type="file" id="importFile" accept=".json,.csv" style="display: none;">
-                    <button id="importBtn" class="dropdown-item">Importar...</button>
+                <button class="menu-button dropdown-toggle">Arquivo ▾</button>
+                <div class="dropdown-content">
+                    <input type="file" id="importFile" accept=".json" style="display: none;">
+                    <button id="importBtn" class="dropdown-item">Importar JSON...</button>
                     <select id="exportSelect" class="dropdown-item">
                         <option value="" disabled selected>Exportar como...</option>
                         <option value="json">JSON</option>
@@ -381,9 +433,10 @@
                 </div>
             </div>
         </div>
-        <div class="menu">
-            <div class="menu-item">
+        <div class="header-right">
+            <div class="search-container">
                 <input type="text" id="searchInput" placeholder="Buscar...">
+                <input type="checkbox" id="searchMode" title="Ativar busca por IA">
             </div>
             <div class="menu-item">
                 <select id="filterStatus">
@@ -394,18 +447,31 @@
                     <option value="Aguardando">Aguardando</option>
                 </select>
             </div>
-             <div class="menu-item">
-                <label style="font-size: 0.8em; margin-right: 5px; display: flex; align-items: center;">
+            <div class="menu-item">
+                <label style="font-size: 0.8em; margin-right: 5px; display: flex; align-items: center; cursor: pointer;">
                     <input type="checkbox" id="showCompleted" checked> Mostrar Finalizados
                 </label>
+            </div>
+            <div class="dropdown">
+                <button id="notificationBtn" class="menu-button dropdown-toggle">
+                    🔔
+                    <span id="notification-count" style="display: none;">0</span>
+                </button>
+                <div id="notification-list" class="dropdown-content">
+                    <!-- Notificações serão inseridas aqui -->
+                </div>
+            </div>
+            <div class="dropdown">
+                <button class="menu-button dropdown-toggle">⚙️</button>
+                <div class="dropdown-content">
+                    <button id="setApiKeyBtn" class="dropdown-item">Definir Chave de API do Google</button>
+                </div>
             </div>
         </div>
     </header>
 
     <!-- PAINEL KANBAN -->
-    <main id="kanbanBoard">
-        <!-- Colunas de Status serão geradas pelo JavaScript -->
-    </main>
+    <main id="kanbanBoard"></main>
 
     <!-- BOTÃO ADICIONAR FLUTUANTE -->
     <button id="addTicketFab" class="fab">+</button>
@@ -423,14 +489,15 @@
                         <input type="text" id="ticketTitle" required>
                     </div>
                     <div class="form-field">
-                        <label for="ticketResponsible">Responsável</label>
-                        <input type="text" id="ticketResponsible" required list="responsibles-list">
-                        <datalist id="responsibles-list"></datalist>
-                    </div>
-                    <div class="form-field">
                         <label for="ticketStatus">Status</label>
-                        <select id="ticketStatus" required>
-                            <!-- Options geradas via JS -->
+                        <select id="ticketStatus" required></select>
+                    </div>
+                     <div class="form-field">
+                        <label for="ticketPriority">Prioridade</label>
+                        <select id="ticketPriority" required>
+                            <option value="Baixa">Baixa</option>
+                            <option value="Media">Média</option>
+                            <option value="Alta">Alta</option>
                         </select>
                     </div>
                      <div class="form-field">
@@ -442,32 +509,16 @@
                         <input type="date" id="ticketDeadline" required>
                     </div>
                     <div class="form-field full-width">
-                        <label for="ticketPriority">Prioridade</label>
-                        <select id="ticketPriority" required>
-                            <option value="Baixa">Baixa</option>
-                            <option value="Media">Média</option>
-                            <option value="Alta">Alta</option>
-                        </select>
-                    </div>
-                    <div class="form-field full-width">
                         <label for="ticketNotes">Observações</label>
                         <textarea id="ticketNotes" rows="3"></textarea>
                     </div>
-                    <!-- Funcionalidade Extra: Anexos (Links) -->
-                    <div class="form-field full-width">
-                        <label>Links Anexados</label>
-                        <div id="attachmentsContainer"></div>
-                        <input type="url" id="newAttachmentInput" placeholder="Cole um link e pressione Enter">
-                    </div>
                 </div>
-
                 <div class="form-buttons">
                     <button type="button" id="deleteTicketBtn" class="btn-delete" style="display:none;">Excluir</button>
                     <button type="button" class="btn-cancel">Cancelar</button>
                     <button type="submit" class="btn-save">Salvar</button>
                 </div>
             </form>
-            <!-- Histórico -->
             <div id="ticket-history" class="modal-extra-section" style="display:none;">
                 <h4>Histórico de Alterações</h4>
                 <ul id="history-list"></ul>
@@ -475,18 +526,21 @@
         </div>
     </div>
 
-
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             // --- VARIÁVEIS E CONSTANTES GLOBAIS ---
             const kanbanBoard = document.getElementById('kanbanBoard');
             const ticketForm = document.getElementById('ticketForm');
             const searchInput = document.getElementById('searchInput');
+            const searchMode = document.getElementById('searchMode');
             const filterStatus = document.getElementById('filterStatus');
-            const showCompletedCheckbox = document.getElementById('showCompleted');
             const addTicketFab = document.getElementById('addTicketFab');
+            const showCompletedCheckbox = document.getElementById('showCompleted');
+            const notificationList = document.getElementById('notification-list');
+            const notificationCount = document.getElementById('notification-count');
 
             let tickets = [];
+            let googleApiKey = '';
             const statuses = ['Aberto', 'Andamento', 'Aguardando', 'Finalizado'];
             const statusColors = {
                 Aberto: 'var(--status-aberto)', Andamento: 'var(--status-andamento)',
@@ -496,16 +550,17 @@
                 Alta: 'var(--priority-alta)', Media: 'var(--priority-media)', Baixa: 'var(--priority-baixa)',
             };
 
-            // --- FUNÇÕES DE LÓGICA DE DADOS (LocalStorage, Logs) ---
+            // --- FUNÇÕES DE LÓGICA DE DADOS ---
             const loadData = () => {
-                const data = localStorage.getItem('todo-adm-tickets-v3'); // Nova chave para evitar conflitos
+                const data = localStorage.getItem('todo-adm-tickets-v6');
+                googleApiKey = localStorage.getItem('todo-adm-google-api-key') || '';
                 tickets = data ? JSON.parse(data) : [];
-                populateDatalists();
+                renderNotifications();
             };
 
             const saveData = () => {
-                localStorage.setItem('todo-adm-tickets-v3', JSON.stringify(tickets));
-                populateDatalists();
+                localStorage.setItem('todo-adm-tickets-v6', JSON.stringify(tickets));
+                renderNotifications();
             };
             
             const addLogEntry = (ticket, action, user = "Usuário") => {
@@ -514,16 +569,15 @@
                 if (ticket.history.length > 20) ticket.history.pop();
             };
 
-            const populateDatalists = () => {
-                const responsibles = [...new Set(tickets.map(t => t.responsible).filter(Boolean))];
-                const list = document.getElementById('responsibles-list');
-                list.innerHTML = responsibles.map(r => `<option value="${r}">`).join('');
-            };
-
-            // --- FUNÇÕES DE RENDERIZAÇÃO NA UI ---
-            const renderBoard = () => {
+            // --- RENDERIZAÇÃO DA UI ---
+            const renderBoard = async () => {
+                kanbanBoard.innerHTML = '<p style="padding: 20px; color: #aaa;">Carregando tickets...</p>';
+                const filteredTickets = await getFilteredTickets();
                 kanbanBoard.innerHTML = '';
-                const filteredTickets = getFilteredTickets();
+
+                if (filteredTickets.length === 0 && tickets.length > 0) {
+                     kanbanBoard.innerHTML = '<p style="padding: 20px; color: #aaa;">Nenhum ticket encontrado com os filtros atuais.</p>';
+                }
 
                 statuses.forEach(status => {
                     if (!showCompletedCheckbox.checked && status === 'Finalizado') return;
@@ -561,83 +615,192 @@
                 card.dataset.id = ticket.id;
                 card.style.borderColor = statusColors[ticket.status];
 
-                const isOverdue = new Date(ticket.deadline) < new Date() && ticket.status !== 'Finalizado';
-                
-                let attachmentsHTML = '';
-                if (ticket.attachments && ticket.attachments.length > 0) {
-                    attachmentsHTML = `<div class="ticket-attachments">
-                        <p><strong>Anexos:</strong> <a href="${ticket.attachments[0]}" target="_blank" rel="noopener noreferrer">${ticket.attachments[0].substring(0, 30)}...</a></p>
-                    </div>`;
-                }
+                const now = new Date();
+                const deadline = new Date(ticket.deadline);
+                const isOverdue = deadline < now && ticket.status !== 'Finalizado';
+                const nearingDeadline = !isOverdue && (deadline - now) / (1000 * 3600) <= 24 && ticket.status !== 'Finalizado';
 
+                if (nearingDeadline) card.classList.add('nearing-deadline');
+                
                 card.innerHTML = `
                     <div class="ticket-header">
                         <span class="ticket-id">#${ticket.id.toString().substring(0, 6)}</span>
-                        <span class="ticket-priority" style="background-color: ${priorityColors[ticket.priority]}">${ticket.priority}</span>
+                        <div class="ticket-header-right">
+                            <select data-id="${ticket.id}" class="card-status-select">
+                                ${statuses.map(s => `<option value="${s}" ${s === ticket.status ? 'selected' : ''}>${s}</option>`).join('')}
+                            </select>
+                            <span class="ticket-priority" style="background-color: ${priorityColors[ticket.priority]}">${ticket.priority}</span>
+                        </div>
                     </div>
                     <div class="ticket-content">
                         <strong>${ticket.title}</strong>
-                        <p><strong>Resp:</strong> ${ticket.responsible}</p>
                         <p>${ticket.notes || ''}</p>
                     </div>
-                    ${attachmentsHTML}
                     <div class="ticket-footer">
                         <span>Início: ${new Date(ticket.startDate).toLocaleDateString()}</span>
                         <span class="ticket-deadline ${isOverdue ? 'overdue' : ''}">Prazo: ${new Date(ticket.deadline).toLocaleDateString()}</span>
                     </div>
                 `;
+                
+                card.querySelector('.card-status-select').addEventListener('click', (e) => e.stopPropagation());
+                card.querySelector('.card-status-select').addEventListener('change', handleQuickStatusChange);
                 card.addEventListener('click', () => openModal('ticketModal', ticket.id));
                 return card;
             };
 
-            const getFilteredTickets = () => {
+            const getFilteredTickets = async () => {
                 const searchTerm = searchInput.value.toLowerCase();
                 const statusFilter = filterStatus.value;
                 
-                return tickets.filter(ticket => {
-                    const matchesSearch = searchTerm === '' ||
-                        Object.values(ticket).some(val => 
-                            String(val).toLowerCase().includes(searchTerm)
+                let baseTickets = tickets;
+
+                if (searchMode.checked && searchTerm) {
+                    searchInput.disabled = true;
+                    searchInput.placeholder = 'Pesquisando com IA...';
+                    try {
+                        const aiFilteredIds = await performAISearch(searchTerm);
+                        baseTickets = tickets.filter(t => aiFilteredIds.includes(t.id));
+                    } catch (error) {
+                        alert(`Erro na busca com IA: ${error.message}`);
+                        baseTickets = tickets.filter(ticket => 
+                            (ticket.title && ticket.title.toLowerCase().includes(searchTerm)) ||
+                            (ticket.notes && ticket.notes.toLowerCase().includes(searchTerm))
                         );
+                    } finally {
+                        searchInput.disabled = false;
+                        searchInput.placeholder = 'Buscar...';
+                    }
+                } else if (searchTerm) {
+                    baseTickets = tickets.filter(ticket => 
+                        (ticket.title && ticket.title.toLowerCase().includes(searchTerm)) ||
+                        (ticket.notes && ticket.notes.toLowerCase().includes(searchTerm))
+                    );
+                }
+
+                return baseTickets.filter(ticket => {
                     const matchesStatus = statusFilter === '' || ticket.status === statusFilter;
                     const matchesCompleted = showCompletedCheckbox.checked || ticket.status !== 'Finalizado';
-                    return matchesSearch && matchesStatus && matchesCompleted;
+                    return matchesStatus && matchesCompleted;
                 });
             };
 
-            // --- FUNÇÕES DE MODAL ---
+            // --- LÓGICA DE IA ---
+            const performAISearch = async (query) => {
+                if (!googleApiKey) throw new Error("Chave de API do Google não definida. Por favor, defina nas configurações.");
+                
+                const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${googleApiKey}`;
+                
+                let ticketsToSearch = showCompletedCheckbox.checked ? tickets : tickets.filter(t => t.status !== 'Finalizado');
+                const simplifiedTickets = ticketsToSearch.map(({ id, title, notes, priority, deadline }) => ({ id, title, notes, priority, deadline }));
+
+                const prompt = `Você é um assistente de kanban. Analise as tarefas JSON. A data atual é ${new Date().toLocaleDateString()}. Pesquisa do usuário: "${query}". Retorne um array JSON com os IDs das tarefas mais relevantes. Lista: ${JSON.stringify(simplifiedTickets)}. Responda apenas com o array de IDs.`;
+
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { response_mime_type: "application/json" } })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error.message || "Erro na API do Google.");
+                }
+
+                const data = await response.json();
+                return JSON.parse(data.candidates[0].content.parts[0].text);
+            };
+
+            // --- NOTIFICAÇÕES ---
+            const renderNotifications = () => {
+                notificationList.innerHTML = '';
+                const now = new Date();
+                let count = 0;
+
+                const urgentTickets = tickets.filter(ticket => {
+                    if (ticket.status === 'Finalizado') return false;
+                    const deadline = new Date(ticket.deadline);
+                    const hoursRemaining = (deadline - now) / (1000 * 3600);
+                    return hoursRemaining <= 24;
+                });
+
+                if (urgentTickets.length === 0) {
+                    notificationList.innerHTML = '<div class="notification-item"><p>Nenhuma notificação</p></div>';
+                    notificationCount.style.display = 'none';
+                    return;
+                }
+
+                urgentTickets.sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
+
+                urgentTickets.forEach(ticket => {
+                    const deadline = new Date(ticket.deadline);
+                    const isOverdue = deadline < now;
+                    const message = isOverdue ? 'Ticket Atrasado!' : 'Vence em menos de 24h!';
+                    
+                    const item = document.createElement('div');
+                    item.className = 'notification-item';
+                    item.dataset.ticketId = ticket.id;
+                    item.innerHTML = `
+                        <p><strong>${ticket.title}</strong></p>
+                        <small style="color: ${isOverdue ? 'var(--priority-alta)' : 'var(--status-aberto)'}">${message}</small>
+                        <select data-id="${ticket.id}" class="card-status-select">
+                            ${statuses.map(s => `<option value="${s}" ${s === ticket.status ? 'selected' : ''}>${s}</option>`).join('')}
+                        </select>
+                    `;
+                    notificationList.appendChild(item);
+                });
+
+                count = urgentTickets.length;
+                notificationCount.textContent = count;
+                notificationCount.style.display = count > 0 ? 'flex' : 'none';
+            };
+
+            const requestNotificationPermission = () => {
+                if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+                    Notification.requestPermission();
+                }
+            };
+
+            const checkDeadlinesForDesktop = () => {
+                const now = new Date();
+                tickets.forEach(ticket => {
+                    if (ticket.status === 'Finalizado') return;
+                    const deadline = new Date(ticket.deadline);
+                    const hoursRemaining = (deadline - now) / (1000 * 3600);
+                    if (hoursRemaining > 0 && hoursRemaining <= 24) {
+                        showDesktopNotification(`Ticket próximo do prazo: "${ticket.title}"`, `O prazo termina em menos de 24 horas.`);
+                    }
+                });
+            };
+
+            const showDesktopNotification = (title, body) => {
+                if ('Notification' in window && Notification.permission === 'granted') {
+                    new Notification(title, { body });
+                }
+            };
+
+            // --- MODAL E FORMULÁRIOS ---
             const openModal = (modalId, ticketId = null) => {
                 const modal = document.getElementById(modalId);
-                if (modalId === 'ticketModal') {
-                    setupTicketModal(ticketId);
-                }
+                if (modalId === 'ticketModal') setupTicketModal(ticketId);
                 modal.style.display = 'block';
             };
 
-            const closeModal = (modalId) => {
-                document.getElementById(modalId).style.display = 'none';
-            };
+            const closeModal = (modalId) => document.getElementById(modalId).style.display = 'none';
 
             const setupTicketModal = (ticketId) => {
                 ticketForm.reset();
-                document.getElementById('attachmentsContainer').innerHTML = '';
                 document.getElementById('ticket-history').style.display = 'none';
-                
-                const statusSelect = document.getElementById('ticketStatus');
-                statusSelect.innerHTML = statuses.map(s => `<option value="${s}">${s}</option>`).join('');
+                document.getElementById('ticketStatus').innerHTML = statuses.map(s => `<option value="${s}">${s}</option>`).join('');
 
                 if (ticketId) {
                     const ticket = tickets.find(t => t.id === ticketId);
                     document.getElementById('modalTitle').textContent = 'Editar Ticket';
                     Object.keys(ticket).forEach(key => {
-                        const element = document.getElementById(`ticket${key.charAt(0).toUpperCase() + key.slice(1)}`);
-                        if (element) element.value = ticket[key];
+                        const el = document.getElementById(`ticket${key.charAt(0).toUpperCase() + key.slice(1)}`);
+                        if (el) el.value = ticket[key];
                     });
                     document.getElementById('ticketId').value = ticket.id;
-                    
-                    if(ticket.attachments) ticket.attachments.forEach(renderAttachmentInModal);
-                    if(ticket.history && ticket.history.length > 0) renderHistoryInModal(ticket.history);
-
+                    if (ticket.history?.length > 0) renderHistoryInModal(ticket.history);
                     document.getElementById('deleteTicketBtn').style.display = 'inline-block';
                 } else {
                     document.getElementById('modalTitle').textContent = 'Novo Ticket';
@@ -647,44 +810,29 @@
                 }
             };
             
-            const renderAttachmentInModal = (url) => {
-                const div = document.createElement('div');
-                div.innerHTML = `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a> <button type="button">&times;</button>`;
-                document.getElementById('attachmentsContainer').appendChild(div);
-                div.querySelector('button').addEventListener('click', () => div.remove());
-            };
-
             const renderHistoryInModal = (history) => {
                 const historyContainer = document.getElementById('ticket-history');
-                const historyList = document.getElementById('history-list');
-                historyList.innerHTML = '';
-                history.forEach(log => {
-                    const li = document.createElement('li');
-                    li.textContent = `${new Date(log.timestamp).toLocaleString()}: ${log.action} (por ${log.user})`;
-                    historyList.appendChild(li);
-                });
                 historyContainer.style.display = 'block';
+                document.getElementById('history-list').innerHTML = history.map(log => 
+                    `<li>${new Date(log.timestamp).toLocaleString()}: ${log.action} (por ${log.user})</li>`
+                ).join('');
             };
 
-            // --- MANIPULADORES DE EVENTOS (Handlers) ---
+            // --- HANDLERS DE EVENTOS ---
             const handleFormSubmit = (e) => {
                 e.preventDefault();
                 const id = document.getElementById('ticketId').value;
                 const originalTicket = id ? { ...tickets.find(t => t.id === id) } : null;
                 
-                const attachments = Array.from(document.querySelectorAll('#attachmentsContainer a')).map(a => a.href);
-
                 const ticketData = {
                     id: id || Date.now().toString(),
                     title: document.getElementById('ticketTitle').value.trim(),
-                    responsible: document.getElementById('ticketResponsible').value.trim(),
                     status: document.getElementById('ticketStatus').value,
                     startDate: document.getElementById('ticketStartDate').value,
                     deadline: document.getElementById('ticketDeadline').value,
                     priority: document.getElementById('ticketPriority').value,
                     notes: document.getElementById('ticketNotes').value.trim(),
-                    attachments: attachments,
-                    history: originalTicket ? originalTicket.history : []
+                    history: originalTicket?.history || []
                 };
 
                 if (id) {
@@ -696,24 +844,15 @@
                     addLogEntry(ticketData, 'Ticket criado.');
                     tickets.push(ticketData);
                 }
-
                 saveData();
                 renderBoard();
                 closeModal('ticketModal');
             };
             
-            const getChanges = (oldT, newT) => {
-                let changes = [];
-                for (const key in newT) {
-                    if (key !== 'history' && JSON.stringify(oldT[key]) !== JSON.stringify(newT[key])) {
-                        changes.push(`${key} alterado`);
-                    }
-                }
-                return changes.join(', ');
-            }
+            const getChanges = (oldT, newT) => Object.keys(newT).filter(key => key !== 'history' && JSON.stringify(oldT[key]) !== JSON.stringify(newT[key])).map(key => `${key} alterado`).join(', ');
 
             const handleDeleteTicket = () => {
-                if (confirm('Tem certeza que deseja excluir este ticket? Esta ação não pode ser desfeita.')) {
+                if (confirm('Tem certeza que deseja excluir este ticket?')) {
                     const id = document.getElementById('ticketId').value;
                     tickets = tickets.filter(t => t.id !== id);
                     saveData();
@@ -722,40 +861,43 @@
                 }
             };
             
-            const handleNewAttachment = (e) => {
-                if (e.key === 'Enter' && e.target.value.trim() !== '') {
-                    e.preventDefault();
-                    try {
-                        new URL(e.target.value); // Valida a URL
-                        renderAttachmentInModal(e.target.value.trim());
-                        e.target.value = '';
-                    } catch (_) {
-                        alert('Por favor, insira um link válido.');
-                    }
+            const handleSetApiKey = () => {
+                const key = prompt("Insira sua chave de API do Google AI Studio:", googleApiKey);
+                if (key !== null) {
+                    googleApiKey = key.trim();
+                    localStorage.setItem('todo-adm-google-api-key', googleApiKey);
+                    alert("Chave de API salva com sucesso!");
                 }
             };
 
-            // --- DRAG AND DROP ---
+            const handleQuickStatusChange = (e) => {
+                e.stopPropagation();
+                const ticketId = e.target.dataset.id;
+                const newStatus = e.target.value;
+                const ticketToUpdate = tickets.find(t => t.id === ticketId);
+
+                if (ticketToUpdate && ticketToUpdate.status !== newStatus) {
+                    addLogEntry(ticketToUpdate, `Status alterado de "${ticketToUpdate.status}" para "${newStatus}"`);
+                    ticketToUpdate.status = newStatus;
+                    saveData();
+                    renderBoard();
+                }
+            };
+
+            // --- DRAG & DROP, IMPORT/EXPORT ---
             const setupDragAndDrop = () => {
                 document.querySelectorAll('.ticket-card').forEach(card => {
                     card.addEventListener('dragstart', e => e.target.classList.add('dragging'));
                     card.addEventListener('dragend', e => e.target.classList.remove('dragging'));
                 });
-
                 document.querySelectorAll('.status-column').forEach(column => {
-                    column.addEventListener('dragover', e => {
-                        e.preventDefault();
-                        const dragging = document.querySelector('.dragging');
-                        if (dragging) column.querySelector('.tickets-container').appendChild(dragging);
-                    });
-
+                    column.addEventListener('dragover', e => { e.preventDefault(); });
                     column.addEventListener('drop', e => {
                         e.preventDefault();
                         const cardId = document.querySelector('.dragging')?.dataset.id;
                         if (!cardId) return;
-                        const newStatus = column.dataset.status;
                         const ticket = tickets.find(t => t.id === cardId);
-                        
+                        const newStatus = column.dataset.status;
                         if (ticket.status !== newStatus) {
                             addLogEntry(ticket, `Status movido de "${ticket.status}" para "${newStatus}"`);
                             ticket.status = newStatus;
@@ -765,8 +907,7 @@
                     });
                 });
             };
-            
-            // --- IMPORT/EXPORT ---
+
             const handleExport = (format) => {
                 if (tickets.length === 0) return alert('Nenhum ticket para exportar.');
                 const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -777,7 +918,7 @@
                     content = JSON.stringify(tickets, null, 2);
                     mimeType = 'application/json';
                 } else if (format === 'csv') {
-                    const headers = Object.keys(tickets[0]).join(',');
+                    const headers = Object.keys(tickets[0] || {}).join(',');
                     const rows = tickets.map(t => {
                         return Object.values(t).map(val => {
                             let value = '';
@@ -794,11 +935,15 @@
                     content = `${headers}\n${rows.join('\n')}`;
                     mimeType = 'text/csv;charset=utf-8;';
                 }
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(new Blob([content], { type: mimeType }));
-                a.download = filename;
-                a.click();
-                URL.revokeObjectURL(a.href);
+                if (content) {
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(new Blob([content], { type: mimeType }));
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(a.href);
+                }
             };
 
             const handleImport = (event) => {
@@ -831,51 +976,60 @@
                 };
                 reader.readAsText(file);
             };
-            
-            // --- MENU DROPDOWN ---
-            const fileMenuBtn = document.getElementById('fileMenuBtn');
-            const fileMenuDropdown = document.getElementById('fileMenuDropdown');
-            fileMenuBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                fileMenuDropdown.classList.toggle('show');
-            });
-            window.addEventListener('click', (e) => {
-                if (!fileMenuBtn.contains(e.target)) {
-                    fileMenuDropdown.classList.remove('show');
-                }
-            });
 
-
-            // --- INICIALIZAÇÃO E EVENT LISTENERS ---
+            // --- INICIALIZAÇÃO E LISTENERS ---
             addTicketFab.addEventListener('click', () => openModal('ticketModal'));
-            
             document.querySelector('#ticketModal .close-button').addEventListener('click', () => closeModal('ticketModal'));
             document.querySelector('#ticketModal .btn-cancel').addEventListener('click', () => closeModal('ticketModal'));
-            window.addEventListener('click', e => {
-                if (e.target.classList.contains('modal')) closeModal(e.target.id);
-            });
-
             ticketForm.addEventListener('submit', handleFormSubmit);
             document.getElementById('deleteTicketBtn').addEventListener('click', handleDeleteTicket);
-            document.getElementById('newAttachmentInput').addEventListener('keydown', handleNewAttachment);
+            document.getElementById('setApiKeyBtn').addEventListener('click', handleSetApiKey);
+
+            document.querySelectorAll('.dropdown-toggle').forEach(btn => {
+                btn.addEventListener('click', e => {
+                    e.stopPropagation();
+                    const dropdown = btn.nextElementSibling;
+                    document.querySelectorAll('.dropdown-content').forEach(d => {
+                        if (d !== dropdown) d.classList.remove('show');
+                    });
+                    dropdown.classList.toggle('show');
+                });
+            });
+            window.addEventListener('click', () => document.querySelectorAll('.dropdown-content').forEach(d => d.classList.remove('show')));
             
-            document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importFile').click());
-            document.getElementById('importFile').addEventListener('change', handleImport);
-            document.getElementById('exportSelect').addEventListener('change', e => {
-                if(e.target.value) {
-                    handleExport(e.target.value);
-                    e.target.value = ''; // Reseta o select
-                    fileMenuDropdown.classList.remove('show');
+            notificationList.addEventListener('click', (e) => {
+                const target = e.target;
+                if (target.closest('.notification-item') && !target.matches('select')) {
+                    const ticketId = target.closest('.notification-item').dataset.ticketId;
+                    const card = document.querySelector(`.ticket-card[data-id="${ticketId}"]`);
+                    if (card) {
+                        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        card.classList.add('flash');
+                        setTimeout(() => card.classList.remove('flash'), 1000);
+                    }
+                    notificationList.classList.remove('show');
                 }
             });
+            notificationList.addEventListener('change', handleQuickStatusChange);
 
-            [searchInput, filterStatus, showCompletedCheckbox].forEach(el => {
-                el.addEventListener('input', renderBoard);
-                el.addEventListener('change', renderBoard);
+
+            document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importFile').click());
+            document.getElementById('importFile').addEventListener('change', handleImport);
+            document.getElementById('exportSelect').addEventListener('change', e => { if (e.target.value) handleExport(e.target.value); e.target.value = ''; });
+
+            let searchTimeout;
+            searchInput.addEventListener('input', () => {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(renderBoard, 500); // Debounce para evitar buscas excessivas
             });
+            searchMode.addEventListener('change', () => searchInput.classList.toggle('ai-active', searchMode.checked));
+            filterStatus.addEventListener('change', renderBoard);
+            showCompletedCheckbox.addEventListener('change', renderBoard);
 
             loadData();
             renderBoard();
+            requestNotificationPermission();
+            setInterval(checkDeadlinesForDesktop, 60 * 1000 * 5); // Verifica prazos a cada 5 minutos
         });
     </script>
 </body>
