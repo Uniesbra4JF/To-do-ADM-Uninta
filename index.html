@@ -140,6 +140,9 @@
             min-width: 300px;
         }
         .notification-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             padding: 10px;
             border-bottom: 1px solid var(--border-color);
             cursor: pointer;
@@ -150,16 +153,16 @@
         .notification-item:hover {
             background-color: var(--surface-hover-color);
         }
+        .notification-info {
+            flex-grow: 1;
+            margin-right: 10px;
+        }
         .notification-item p {
-            margin: 0 0 5px 0;
+            margin: 0 0 2px 0;
             font-size: 0.9em;
         }
         .notification-item small {
             color: #aaa;
-        }
-        .notification-item select {
-            width: 100%;
-            margin-top: 5px;
         }
         
         /* --- Pesquisa com IA --- */
@@ -819,8 +822,10 @@
                     item.className = 'notification-item';
                     item.dataset.ticketId = ticket.id;
                     item.innerHTML = `
-                        <p><strong>${ticket.title}</strong></p>
-                        <small style="color: ${isOverdue ? 'var(--priority-alta)' : 'var(--status-aberto)'}">${message}</small>
+                        <div class="notification-info">
+                            <p><strong>${ticket.title}</strong></p>
+                            <small style="color: ${isOverdue ? 'var(--priority-alta)' : 'var(--status-aberto)'}">${message}</small>
+                        </div>
                         <select data-id="${ticket.id}" class="card-status-select">
                             ${statuses.map(s => `<option value="${s}" ${s === ticket.status ? 'selected' : ''}>${s}</option>`).join('')}
                         </select>
@@ -1083,7 +1088,16 @@
                     dropdown.classList.toggle('show');
                 });
             });
-            window.addEventListener('click', () => document.querySelectorAll('.dropdown-content').forEach(d => d.classList.remove('show')));
+            
+            window.addEventListener('click', (e) => {
+                const openDropdowns = document.querySelectorAll('.dropdown-content.show');
+                openDropdowns.forEach(dropdownContent => {
+                    const dropdown = dropdownContent.closest('.dropdown');
+                    if (dropdown && !dropdown.contains(e.target)) {
+                        dropdownContent.classList.remove('show');
+                    }
+                });
+            });
             
             notificationList.addEventListener('click', (e) => {
                 const target = e.target;
