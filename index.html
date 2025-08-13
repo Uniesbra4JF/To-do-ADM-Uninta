@@ -288,10 +288,6 @@
             transition: transform 0.2s, box-shadow 0.2s;
             animation: fadeIn 0.5s ease;
         }
-        .ticket-card.nearing-deadline {
-            box-shadow: 0 0 15px var(--status-aberto);
-            animation: pulse-yellow 2s infinite;
-        }
         .ticket-card.dragging {
             opacity: 0.5;
             transform: rotate(3deg);
@@ -336,11 +332,54 @@
             color: #aaa;
         }
         
+        .footer-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .communication-status {
+            display: flex;
+            gap: 8px;
+        }
+
+        .comm-icon {
+            background-color: var(--surface-hover-color);
+            border: 1px solid var(--border-color);
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: help;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+            transition: transform 0.2s;
+        }
+        .comm-icon:hover {
+            transform: scale(1.1);
+        }
+        
         .ticket-id { font-size: 0.8em; color: #aaa; }
         .ticket-priority { padding: 3px 8px; border-radius: 10px; font-size: 0.8em; color: white; font-weight: bold; }
         .ticket-content { margin-bottom: 10px; }
         .ticket-content strong { font-size: 1.1em; }
-        .ticket-deadline.overdue { color: var(--priority-alta); font-weight: bold; animation: pulse-red 1.5s infinite; }
+        
+        .deadline-wrapper {
+            border: 2px solid transparent;
+            padding: 2px 5px;
+            border-radius: 4px;
+            transition: border-color 0.3s;
+        }
+        .deadline-wrapper.alert {
+            animation: pulse-border-red 1.5s infinite;
+        }
+        .deadline-wrapper.alert span {
+            color: var(--priority-alta);
+            font-weight: bold;
+        }
 
         .ticket-requirements .tags-container {
             display: flex;
@@ -439,8 +478,7 @@
 
         /* --- ANIMAÇÕES E RESPONSIVIDADE --- */
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes pulse-red { 0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); } 100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); } }
-        @keyframes pulse-yellow { 0% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(255, 193, 7, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0); } }
+        @keyframes pulse-border-red { 0% { border-color: var(--priority-alta); } 50% { border-color: transparent; } 100% { border-color: var(--priority-alta); } }
         @keyframes bg-spin { to { --border-angle: 360deg; } }
         @keyframes flash {
             0% { background-color: var(--primary-accent); }
@@ -675,8 +713,6 @@
                 const deadline = new Date(ticket.deadline);
                 const isOverdue = deadline < now && ticket.status !== 'Finalizado';
                 const nearingDeadline = !isOverdue && (deadline - now) / (1000 * 3600) <= 24 && ticket.status !== 'Finalizado';
-
-                if (nearingDeadline) card.classList.add('nearing-deadline');
                 
                 let requirementsHTML = '';
                 if (ticket.requirements) {
@@ -691,6 +727,15 @@
                             </div>
                         `;
                     }
+                }
+
+                let communicationHTML = '';
+                if (ticket.aviseiRegiana || ticket.comuniqueiAluno || ticket.aguardandoRetorno) {
+                    communicationHTML += '<div class="communication-status">';
+                    if (ticket.aviseiRegiana) communicationHTML += '<span class="comm-icon" title="Regiana foi avisada">R</span>';
+                    if (ticket.comuniqueiAluno) communicationHTML += '<span class="comm-icon" title="Aluno comunicado">A</span>';
+                    if (ticket.aguardandoRetorno) communicationHTML += '<span class="comm-icon" title="Aguardando retorno do aluno">⏳</span>';
+                    communicationHTML += '</div>';
                 }
 
                 card.innerHTML = `
@@ -708,8 +753,12 @@
                         ${requirementsHTML}
                     </div>
                     <div class="ticket-footer">
-                        <span>Início: ${new Date(ticket.startDate).toLocaleDateString()}</span>
-                        <span class="ticket-deadline ${isOverdue ? 'overdue' : ''}">Prazo: ${new Date(ticket.deadline).toLocaleDateString()}</span>
+                        <div class="footer-left">
+                           ${communicationHTML}
+                        </div>
+                        <div class="deadline-wrapper ${isOverdue || nearingDeadline ? 'alert' : ''}">
+                            <span>Prazo: ${new Date(ticket.deadline).toLocaleDateString()}</span>
+                        </div>
                     </div>
                 `;
                 
@@ -1090,13 +1139,9 @@
             });
             
             window.addEventListener('click', (e) => {
-                const openDropdowns = document.querySelectorAll('.dropdown-content.show');
-                openDropdowns.forEach(dropdownContent => {
-                    const dropdown = dropdownContent.closest('.dropdown');
-                    if (dropdown && !dropdown.contains(e.target)) {
-                        dropdownContent.classList.remove('show');
-                    }
-                });
+                if (!e.target.closest('.dropdown')) {
+                    document.querySelectorAll('.dropdown-content').forEach(d => d.classList.remove('show'));
+                }
             });
             
             notificationList.addEventListener('click', (e) => {
@@ -1117,7 +1162,7 @@
 
             document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importFile').click());
             document.getElementById('importFile').addEventListener('change', handleImport);
-            document.getElementById('exportSelect').addEventListener('change', e => { if (e.target.value) handleExport(e.target.value); e.target.value = ''; });
+            document.getElementById('exportSelect').addEventListener('change', e => { if (e.target.value) { handleExport(e.target.value); e.target.value = ''; } });
 
             let searchTimeout;
             searchInput.addEventListener('input', () => {
