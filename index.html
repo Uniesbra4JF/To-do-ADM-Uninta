@@ -1233,7 +1233,21 @@
                 tag.completed = !tag.completed;
                 addLogEntry(ticket, `Tag "${tagName}" marcada como ${tag.completed ? 'concluída' : 'pendente'}.`);
                 saveData();
-                renderBoard();
+
+                // FIX: Update only the specific card/row instead of the whole board
+                const currentElement = document.querySelector(`.ticket-card[data-id="${ticketId}"], .ticket-row[data-id="${ticketId}"]`);
+                if (currentElement) {
+                    let newElement;
+                    if (currentElement.classList.contains('ticket-card')) {
+                        newElement = createTicketCard(ticket);
+                    } else {
+                        newElement = createTicketRow(ticket);
+                    }
+                    currentElement.replaceWith(newElement);
+                } else {
+                    // Fallback in case the element isn't visible (e.g., filtered out)
+                    renderBoard();
+                }
             };
 
             // --- DRAG & DROP, IMPORT/EXPORT ---
