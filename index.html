@@ -520,6 +520,11 @@
             </div>
         </div>
         <div class="header-right">
+            <div class="menu-item">
+                <label title="Ordenar por Prioridade" style="font-size: 1.5em; cursor: pointer; display: flex; align-items: center;">
+                    <input type="checkbox" id="prioritySortToggle" style="display: none;"> ⇅
+                </label>
+            </div>
             <div class="search-container">
                 <input type="text" id="searchInput" placeholder="Buscar...">
                 <input type="checkbox" id="searchMode" title="Ativar busca por IA">
@@ -632,6 +637,7 @@
             const showCompletedCheckbox = document.getElementById('showCompleted');
             const notificationList = document.getElementById('notification-list');
             const notificationCount = document.getElementById('notification-count');
+            const prioritySortToggle = document.getElementById('prioritySortToggle');
 
             let tickets = [];
             let googleApiKey = '';
@@ -683,6 +689,11 @@
                     column.style.borderColor = statusColors[status];
 
                     const ticketsInColumn = filteredTickets.filter(t => t.status === status);
+
+                    if (prioritySortToggle.checked) {
+                        const priorityOrder = { 'Alta': 0, 'Media': 1, 'Baixa': 2 };
+                        ticketsInColumn.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
+                    }
 
                     column.innerHTML = `
                         <div class="column-header">
@@ -1172,6 +1183,7 @@
             searchMode.addEventListener('change', () => searchInput.classList.toggle('ai-active', searchMode.checked));
             filterStatus.addEventListener('change', renderBoard);
             showCompletedCheckbox.addEventListener('change', renderBoard);
+            prioritySortToggle.addEventListener('change', renderBoard);
 
             loadData();
             renderBoard();
