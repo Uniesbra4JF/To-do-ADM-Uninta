@@ -431,16 +431,6 @@
         main.list-view .status-column {
             display: none;
         }
-        .virtual-scroll-spacer {
-            width: 100%;
-            position: relative;
-        }
-        .visible-items-container {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-        }
 
         .ticket-row {
             display: flex;
@@ -453,7 +443,8 @@
             border-left: 5px solid;
             cursor: pointer;
             transition: background-color 0.2s, transform 0.2s;
-            height: 70px; /* Altura fixa para cálculo do virtual scroll */
+            min-height: 70px;
+            height: auto;
             box-sizing: border-box;
         }
         .ticket-row:hover {
@@ -467,6 +458,7 @@
             display: flex;
             flex-direction: column;
             align-items: flex-start;
+            min-width: 0; /* Fix para content overflow */
         }
         .ticket-row-main strong {
             font-size: 1.1em;
@@ -478,7 +470,7 @@
         .ticket-row-end {
             display: flex;
             align-items: center;
-            gap: 20px;
+            gap: 15px;
             flex-shrink: 0;
         }
         .last-seen {
@@ -740,7 +732,6 @@
             const priorityColors = {
                 Alta: 'var(--priority-alta)', Media: 'var(--priority-media)', Baixa: 'var(--priority-baixa)',
             };
-            const ITEM_HEIGHT = 78; // Altura de cada item na lista virtual (70px + 8px margin)
 
             // --- FUNÇÕES DE LÓGICA DE DADOS ---
             const loadData = () => {
@@ -857,34 +848,11 @@
                     filteredTickets.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
                 }
 
-                const totalHeight = filteredTickets.length * ITEM_HEIGHT;
-                const spacer = document.createElement('div');
-                spacer.className = 'virtual-scroll-spacer';
-                spacer.style.height = `${totalHeight}px`;
-
-                const visibleItemsContainer = document.createElement('div');
-                visibleItemsContainer.className = 'visible-items-container';
-
-                kanbanBoard.appendChild(spacer);
-                kanbanBoard.appendChild(visibleItemsContainer);
-                
-                const updateVisibleItems = () => {
-                    const scrollTop = kanbanBoard.scrollTop;
-                    const startIndex = Math.floor(scrollTop / ITEM_HEIGHT);
-                    const visibleItemCount = Math.ceil(kanbanBoard.clientHeight / ITEM_HEIGHT) + 2; // +2 for buffer
-                    const endIndex = Math.min(startIndex + visibleItemCount, filteredTickets.length);
-
-                    visibleItemsContainer.innerHTML = '';
-                    for (let i = startIndex; i < endIndex; i++) {
-                        const ticket = filteredTickets[i];
-                        const ticketRow = createTicketRow(ticket);
-                        visibleItemsContainer.appendChild(ticketRow);
-                    }
-                    visibleItemsContainer.style.transform = `translateY(${startIndex * ITEM_HEIGHT}px)`;
-                };
-
-                kanbanBoard.onscroll = updateVisibleItems;
-                updateVisibleItems(); // Initial render
+                // Simple render loop, no virtual scrolling
+                filteredTickets.forEach(ticket => {
+                    const ticketRow = createTicketRow(ticket);
+                    kanbanBoard.appendChild(ticketRow);
+                });
             };
 
             const createRequirementsHTML = (requirements, tagLimit = 3) => {
