@@ -221,7 +221,7 @@
             transform: translateX(20px);
         }
 
-        /* --- PAINEL PRINCIPAL (KANBAN & LIST) --- */
+        /* --- PAINEL KANBAN --- */
         main {
             display: flex;
             gap: 15px;
@@ -448,91 +448,6 @@
             display: block;
             width: 100%;
             text-align: left;
-        }
-
-        /* --- ESTILOS PARA VISUALIZAÇÃO EM LISTA --- */
-        main.list-view {
-            flex-direction: column;
-            align-items: stretch;
-            position: relative;
-            overflow-y: auto;
-        }
-        main.list-view .status-column {
-            display: none;
-        }
-
-        .ticket-row {
-            display: flex;
-            background-color: var(--surface-hover-color);
-            padding: 12px 20px;
-            border-radius: 6px;
-            margin-bottom: 8px;
-            border-left: 5px solid;
-            cursor: pointer;
-            transition: background-color 0.2s, transform 0.2s;
-            min-height: 70px;
-            height: auto;
-            box-sizing: border-box;
-        }
-        .ticket-row:hover {
-            background-color: var(--surface-color);
-            transform: translateY(-1px);
-        }
-        .ticket-row-main {
-            flex-grow: 1;
-            margin-right: 20px;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-            min-width: 0; /* Fix para content overflow */
-        }
-        .ticket-row-top {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start; /* Alinha ao topo */
-            width: 100%;
-        }
-        .ticket-row-title-header {
-            display: flex;
-            align-items: center;
-            width: 100%;
-            gap: 15px;
-            margin-bottom: 8px;
-        }
-        .ticket-row-main strong {
-            font-size: 1.05em;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            flex-grow: 1;
-            min-width: 0;
-        }
-        .ticket-row-title-header .checklist-progress {
-            flex-shrink: 0;
-            width: 200px;
-            margin-bottom: 0;
-        }
-        .ticket-row-end {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            flex-shrink: 0;
-        }
-        .last-seen {
-            color: #999;
-            font-style: italic;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            background-color: rgba(255, 255, 255, 0.05);
-            padding: 3px 7px;
-            border-radius: 10px;
-        }
-        .last-seen svg {
-            width: 15px;
-            height: 15px;
-            fill: #999;
         }
 
         /* --- MODAL --- */
@@ -846,15 +761,8 @@
             // --- RENDERIZAÇÃO DA UI ---
             const renderBoard = async () => {
                 const filteredTickets = await getFilteredTickets();
-                const statusFilter = filterStatus.value;
                 kanbanBoard.innerHTML = ''; 
-                kanbanBoard.onscroll = null;
-
-                if (statusFilter && statusFilter !== '') {
-                    renderListView(filteredTickets);
-                } else {
-                    renderKanbanView(filteredTickets);
-                }
+                renderKanbanView(filteredTickets);
                 setupDragAndDrop();
             };
 
@@ -864,7 +772,9 @@
                     kanbanBoard.innerHTML = '<p style="padding: 20px; color: #aaa;">Nenhum ticket encontrado com os filtros atuais.</p>';
                 }
                 
-                statuses.forEach(status => {
+                const visibleStatuses = filterStatus.value ? [filterStatus.value] : statuses;
+
+                visibleStatuses.forEach(status => {
                     if (!showCompletedCheckbox.checked && status === 'Finalizado') return;
                     
                     const column = document.createElement('div');
@@ -894,23 +804,6 @@
                         const ticketCard = createTicketCard(ticket);
                         ticketsContainer.appendChild(ticketCard);
                     });
-                });
-            };
-
-            const renderListView = (filteredTickets) => {
-                kanbanBoard.classList.add('list-view');
-                if (filteredTickets.length === 0) {
-                    kanbanBoard.innerHTML = '<p style="padding: 20px; color: #aaa;">Nenhum ticket encontrado com o status selecionado.</p>';
-                    return;
-                }
-                if (prioritySortToggle.checked) {
-                    const priorityOrder = { 'Alta': 0, 'Media': 1, 'Baixa': 2 };
-                    filteredTickets.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
-                }
-
-                filteredTickets.forEach(ticket => {
-                    const ticketRow = createTicketRow(ticket);
-                    kanbanBoard.appendChild(ticketRow);
                 });
             };
 
@@ -1028,85 +921,8 @@
                 return card;
             };
 
-            const createTicketRow = (ticket) => {
-                const row = document.createElement('div');
-                row.className = 'ticket-row';
-                row.dataset.id = ticket.id;
-                row.style.borderColor = statusColors[ticket.status];
-
-                const now = new Date();
-                const deadline = new Date(ticket.deadline);
-                const isOverdue = deadline < now && ticket.status !== 'Finalizado';
-                
-                let communicationHTML = '';
-                if (ticket.aviseiRegiana || ticket.comuniqueiAluno || ticket.aguardandoRetorno) {
-                    communicationHTML += '<div class="communication-status">';
-                    if (ticket.aviseiRegiana) communicationHTML += '<span class="comm-icon" title="Regiana foi avisada">R</span>';
-                    if (ticket.comuniqueiAluno) communicationHTML += '<span class="comm-icon" title="Aluno comunicado">A</span>';
-                    if (ticket.aguardandoRetorno) communicationHTML += '<span class="comm-icon" title="Aguardando retorno do aluno">⏳</span>';
-                    communicationHTML += '</div>';
-                }
-
-                const checklist = createChecklistHTML(ticket.subtasks, ticket.id);
-                const progressHTML = checklist ? checklist.progressHTML : '';
-                const checklistItemsHTML = checklist ? `<div class="checklist" style="margin-top: 8px;">${checklist.itemsContainerHTML}</div>` : '';
-                
-                row.innerHTML = `
-                    <div class="ticket-row-main">
-                        <div class="ticket-row-top">
-                            <div class="ticket-row-title-header">
-                                <strong>${ticket.title}</strong>
-                                ${progressHTML}
-                            </div>
-                            <div class="ticket-row-end">
-                                ${communicationHTML}
-                                <span class="last-seen">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z"/><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/></svg>
-                                    <span class="last-seen-text">${formatTimeAgo(ticket.lastSeen)}</span>
-                                </span>
-                                <span class="ticket-priority" style="background-color: ${priorityColors[ticket.priority]}">${ticket.priority}</span>
-                                <div class="deadline-wrapper ${isOverdue ? 'alert' : ''}">
-                                    <span>Prazo: ${new Date(ticket.deadline).toLocaleDateString()}</span>
-                                </div>
-                                <select data-id="${ticket.id}" class="card-status-select">
-                                    ${statuses.map(s => `<option value="${s}" ${s === ticket.status ? 'selected' : ''}>${s}</option>`).join('')}
-                                </select>
-                            </div>
-                        </div>
-                        ${checklistItemsHTML}
-                    </div>
-                `;
-                
-                row.addEventListener('click', (e) => {
-                    if (e.target.classList.contains('toggle-checklist')) {
-                         e.stopPropagation();
-                         const container = e.target.previousElementSibling;
-                         container.classList.toggle('expanded');
-                         e.target.textContent = container.classList.contains('expanded') ? 'Mostrar menos' : 'Mostrar mais...';
-                    } else if (e.target.matches('.checklist-item, .checklist-item *')) {
-                        e.stopPropagation();
-                        const item = e.target.closest('.checklist-item');
-                        const checkbox = item.querySelector('input[type="checkbox"]');
-                        if (e.target !== checkbox) {
-                            checkbox.checked = !checkbox.checked;
-                        }
-                        handleSubtaskCheck(ticket.id, checkbox.dataset.taskName, checkbox.checked);
-                    } else if (e.target.tagName.toLowerCase() !== 'select') {
-                        handleMarkAsSeen(ticket.id);
-                        openModal('ticketModal', ticket.id);
-                    }
-                });
-                
-                const statusSelect = row.querySelector('.card-status-select');
-                statusSelect.addEventListener('change', handleQuickStatusChange);
-                statusSelect.addEventListener('click', (e) => e.stopPropagation());
-
-                return row;
-            };
-
             const getFilteredTickets = async () => {
                 const searchTerm = searchInput.value.toLowerCase();
-                const statusFilter = filterStatus.value;
                 
                 let baseTickets = tickets;
 
@@ -1134,9 +950,7 @@
                 }
 
                 return baseTickets.filter(ticket => {
-                    const matchesStatus = statusFilter === '' || ticket.status === statusFilter;
-                    const matchesCompleted = showCompletedCheckbox.checked || ticket.status !== 'Finalizado';
-                    return matchesStatus && matchesCompleted;
+                    return showCompletedCheckbox.checked || ticket.status !== 'Finalizado';
                 });
             };
 
@@ -1426,9 +1240,6 @@
 
             // --- DRAG & DROP, IMPORT/EXPORT, BACKUP ---
             const setupDragAndDrop = () => {
-                if (kanbanBoard.classList.contains('list-view')) {
-                    return;
-                }
                 document.querySelectorAll('.ticket-card').forEach(card => {
                     card.addEventListener('dragstart', e => e.target.classList.add('dragging'));
                     card.addEventListener('dragend', e => e.target.classList.remove('dragging'));
