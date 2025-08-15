@@ -482,18 +482,15 @@
         .ticket-row-left {
             flex-grow: 1;
             display: flex;
-            flex-direction: column;
-            gap: 8px;
-            min-width: 0; /* FIX para overflow de texto em flex containers */
+            align-items: center;
+            gap: 15px;
+            min-width: 0;
         }
         .ticket-row-left strong {
             font-size: 1.1em;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-        }
-        .ticket-row-left .checklist-progress {
-            margin: 0;
         }
 
         .ticket-row-right {
@@ -502,11 +499,21 @@
             align-items: center;
             gap: 15px;
         }
+        .ticket-row-right .checklist-progress {
+            margin-bottom: 0;
+            width: 120px;
+        }
 
         .ticket-row-bottom {
             margin-top: 15px;
             padding-top: 10px;
             border-top: 1px solid var(--border-color);
+        }
+        .ticket-row-bottom .checklist-items {
+            max-height: 56px; /* Altura para 2 itens */
+        }
+        .ticket-row-bottom .checklist-items.expanded {
+            max-height: 500px;
         }
 
 
@@ -833,6 +840,7 @@
 
             const renderKanbanView = (filteredTickets) => {
                 kanbanBoard.className = ''; // Reseta para a visualização padrão (flex)
+                kanbanBoard.style.padding = '20px'; // Restaura o padding
                 if (filteredTickets.length === 0 && tickets.length > 0) {
                     kanbanBoard.innerHTML = '<p style="padding: 20px; color: #aaa;">Nenhum ticket encontrado com os filtros atuais.</p>';
                 }
@@ -874,6 +882,7 @@
 
             const renderListView = (ticketsToList) => {
                 kanbanBoard.className = 'list-view';
+                kanbanBoard.style.padding = '20px'; // Mantém o padding lateral
                 
                 if (ticketsToList.length === 0) {
                     kanbanBoard.innerHTML = '<p style="padding: 20px; color: #aaa;">Nenhum ticket encontrado para este status.</p>';
@@ -891,7 +900,7 @@
                 });
             };
 
-            const createChecklistHTML = (subtasks, ticketId) => {
+            const createChecklistHTML = (subtasks, ticketId, isListView = false) => {
                 if (!subtasks || subtasks.length === 0) return null;
 
                 const sortedTasks = [...subtasks].sort((a, b) => a.completed - b.completed);
@@ -919,7 +928,7 @@
                     <div class="checklist-items">
                         ${itemsHTML}
                     </div>
-                    ${sortedTasks.length > 3 ? '<button class="toggle-checklist">Mostrar mais...</button>' : ''}
+                    ${sortedTasks.length > (isListView ? 2 : 3) ? '<button class="toggle-checklist">Ver mais...</button>' : ''}
                 `;
 
                 return { progressHTML, itemsContainerHTML };
@@ -946,7 +955,7 @@
                     communicationHTML += '</div>';
                 }
 
-                const checklist = createChecklistHTML(ticket.subtasks, ticket.id);
+                const checklist = createChecklistHTML(ticket.subtasks, ticket.id, false);
                 const checklistHTML = checklist ? `
                     <div class="checklist">
                         ${checklist.progressHTML}
@@ -987,7 +996,7 @@
                          e.stopPropagation();
                          const container = e.target.previousElementSibling;
                          container.classList.toggle('expanded');
-                         e.target.textContent = container.classList.contains('expanded') ? 'Mostrar menos' : 'Mostrar mais...';
+                         e.target.textContent = container.classList.contains('expanded') ? 'Ver menos' : 'Ver mais...';
                     } else if (e.target.matches('.checklist-item, .checklist-item *')) {
                         e.stopPropagation();
                         const item = e.target.closest('.checklist-item');
@@ -1025,20 +1034,20 @@
                     communicationHTML += '</div>';
                 }
 
-                const checklist = createChecklistHTML(ticket.subtasks, ticket.id);
-                const checklistProgressHTML = checklist ? checklist.progressHTML : '';
+                const checklist = createChecklistHTML(ticket.subtasks, ticket.id, true);
+                const checklistProgressHTML = checklist ? checklist.progressHTML : '<div style="width: 120px;"></div>'; // Placeholder for alignment
                 const checklistItemsHTML = checklist ? `<div class="ticket-row-bottom">${checklist.itemsContainerHTML}</div>` : '';
 
                 row.innerHTML = `
                     <div class="ticket-row-top">
                         <div class="ticket-row-left">
                             <strong>${ticket.title}</strong>
-                            ${checklistProgressHTML}
                         </div>
                         <div class="ticket-row-right">
+                            ${checklistProgressHTML}
                             ${communicationHTML}
                             <span class="last-seen" title="Última visualização">
-                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z"/><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/></svg>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z"/><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/></svg>
                                 <span class="last-seen-text">${formatTimeAgo(ticket.lastSeen)}</span>
                             </span>
                             <span class="ticket-priority" style="background-color: ${priorityColors[ticket.priority]}">${ticket.priority}</span>
@@ -1053,25 +1062,26 @@
                     ${checklistItemsHTML}
                 `;
 
-                row.querySelector('.card-status-select').addEventListener('click', (e) => e.stopPropagation());
-                row.querySelector('.card-status-select').addEventListener('change', handleQuickStatusChange);
-
                 row.querySelector('.ticket-row-top').addEventListener('click', (e) => {
-                    if (e.target.matches('select, .comm-icon, .card-status-select *')) return;
+                    if (e.target.closest('.card-status-select, .comm-icon')) {
+                        return;
+                    }
                     handleMarkAsSeen(ticket.id);
                     openModal('ticketModal', ticket.id);
                 });
-                
-                if (checklist) {
-                    row.querySelectorAll('.toggle-checklist').forEach(btn => {
-                        btn.addEventListener('click', e => {
-                            e.stopPropagation();
-                            const container = e.target.previousElementSibling;
-                            container.classList.toggle('expanded');
-                            e.target.textContent = container.classList.contains('expanded') ? 'Mostrar menos' : 'Mostrar mais...';
-                        });
-                    });
 
+                row.querySelector('.card-status-select').addEventListener('change', handleQuickStatusChange);
+
+                if (checklist) {
+                    const toggleBtn = row.querySelector('.toggle-checklist');
+                    if (toggleBtn) {
+                        toggleBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            const container = row.querySelector('.checklist-items');
+                            container.classList.toggle('expanded');
+                            toggleBtn.textContent = container.classList.contains('expanded') ? 'Ver menos' : 'Ver mais...';
+                        });
+                    }
                     row.querySelectorAll('.checklist-item').forEach(item => {
                         item.addEventListener('click', e => {
                             e.stopPropagation();
