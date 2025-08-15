@@ -449,6 +449,66 @@
             width: 100%;
             text-align: left;
         }
+        
+        /* --- VISUALIZAÇÃO EM LISTA --- */
+        main.list-view {
+            flex-direction: column;
+            gap: 10px;
+            max-height: calc(100vh - 80px); /* Ajuste para padding */
+            overflow-y: auto;
+        }
+
+        .ticket-row {
+            background-color: var(--surface-color);
+            border-radius: 8px;
+            padding: 15px;
+            border-left: 5px solid;
+            display: flex;
+            flex-direction: column;
+            animation: fadeIn 0.5s ease;
+        }
+        .ticket-row:hover {
+            background-color: var(--surface-hover-color);
+        }
+
+        .ticket-row-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+            cursor: pointer;
+        }
+
+        .ticket-row-left {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            min-width: 0; /* FIX para overflow de texto em flex containers */
+        }
+        .ticket-row-left strong {
+            font-size: 1.1em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .ticket-row-left .checklist-progress {
+            margin: 0;
+        }
+
+        .ticket-row-right {
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .ticket-row-bottom {
+            margin-top: 15px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border-color);
+        }
+
 
         /* --- MODAL --- */
         .modal {
@@ -606,7 +666,7 @@
         </div>
     </header>
 
-    <!-- PAINEL KANBAN -->
+    <!-- PAINEL KANBAN / LISTA -->
     <main id="kanbanBoard"></main>
 
     <!-- BOTÃO ADICIONAR FLUTUANTE -->
@@ -762,17 +822,22 @@
             const renderBoard = async () => {
                 const filteredTickets = await getFilteredTickets();
                 kanbanBoard.innerHTML = ''; 
-                renderKanbanView(filteredTickets);
-                setupDragAndDrop();
+                
+                if (filterStatus.value) { // Um status específico foi selecionado
+                    renderListView(filteredTickets.filter(t => t.status === filterStatus.value));
+                } else { // "Todos Status"
+                    renderKanbanView(filteredTickets);
+                    setupDragAndDrop();
+                }
             };
 
             const renderKanbanView = (filteredTickets) => {
-                kanbanBoard.classList.remove('list-view');
+                kanbanBoard.className = ''; // Reseta para a visualização padrão (flex)
                 if (filteredTickets.length === 0 && tickets.length > 0) {
                     kanbanBoard.innerHTML = '<p style="padding: 20px; color: #aaa;">Nenhum ticket encontrado com os filtros atuais.</p>';
                 }
                 
-                const visibleStatuses = filterStatus.value ? [filterStatus.value] : statuses;
+                const visibleStatuses = statuses;
 
                 visibleStatuses.forEach(status => {
                     if (!showCompletedCheckbox.checked && status === 'Finalizado') return;
@@ -804,6 +869,25 @@
                         const ticketCard = createTicketCard(ticket);
                         ticketsContainer.appendChild(ticketCard);
                     });
+                });
+            };
+
+            const renderListView = (ticketsToList) => {
+                kanbanBoard.className = 'list-view';
+                
+                if (ticketsToList.length === 0) {
+                    kanbanBoard.innerHTML = '<p style="padding: 20px; color: #aaa;">Nenhum ticket encontrado para este status.</p>';
+                    return;
+                }
+
+                if (prioritySortToggle.checked) {
+                    const priorityOrder = { 'Alta': 0, 'Media': 1, 'Baixa': 2 };
+                    ticketsToList.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
+                }
+                
+                ticketsToList.forEach(ticket => {
+                    const ticketRow = createTicketRow(ticket);
+                    kanbanBoard.appendChild(ticketRow);
                 });
             };
 
@@ -919,6 +1003,86 @@
                 });
 
                 return card;
+            };
+
+            const createTicketRow = (ticket) => {
+                const row = document.createElement('div');
+                row.className = 'ticket-row';
+                row.dataset.id = ticket.id;
+                row.style.borderColor = statusColors[ticket.status];
+
+                const now = new Date();
+                const deadline = new Date(ticket.deadline);
+                const isOverdue = deadline < now && ticket.status !== 'Finalizado';
+                const nearingDeadline = !isOverdue && (deadline - now) / (1000 * 3600) <= 24 && ticket.status !== 'Finalizado';
+
+                let communicationHTML = '';
+                if (ticket.aviseiRegiana || ticket.comuniqueiAluno || ticket.aguardandoRetorno) {
+                    communicationHTML += '<div class="communication-status">';
+                    if (ticket.aviseiRegiana) communicationHTML += '<span class="comm-icon" title="Regiana foi avisada">R</span>';
+                    if (ticket.comuniqueiAluno) communicationHTML += '<span class="comm-icon" title="Aluno comunicado">A</span>';
+                    if (ticket.aguardandoRetorno) communicationHTML += '<span class="comm-icon" title="Aguardando retorno do aluno">⏳</span>';
+                    communicationHTML += '</div>';
+                }
+
+                const checklist = createChecklistHTML(ticket.subtasks, ticket.id);
+                const checklistProgressHTML = checklist ? checklist.progressHTML : '';
+                const checklistItemsHTML = checklist ? `<div class="ticket-row-bottom">${checklist.itemsContainerHTML}</div>` : '';
+
+                row.innerHTML = `
+                    <div class="ticket-row-top">
+                        <div class="ticket-row-left">
+                            <strong>${ticket.title}</strong>
+                            ${checklistProgressHTML}
+                        </div>
+                        <div class="ticket-row-right">
+                            ${communicationHTML}
+                            <span class="last-seen" title="Última visualização">
+                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z"/><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/></svg>
+                                <span class="last-seen-text">${formatTimeAgo(ticket.lastSeen)}</span>
+                            </span>
+                            <span class="ticket-priority" style="background-color: ${priorityColors[ticket.priority]}">${ticket.priority}</span>
+                            <div class="deadline-wrapper ${isOverdue || nearingDeadline ? 'alert' : ''}">
+                                <span>${new Date(ticket.deadline).toLocaleDateString()}</span>
+                            </div>
+                            <select data-id="${ticket.id}" class="card-status-select">
+                                ${statuses.map(s => `<option value="${s}" ${s === ticket.status ? 'selected' : ''}>${s}</option>`).join('')}
+                            </select>
+                        </div>
+                    </div>
+                    ${checklistItemsHTML}
+                `;
+
+                row.querySelector('.card-status-select').addEventListener('click', (e) => e.stopPropagation());
+                row.querySelector('.card-status-select').addEventListener('change', handleQuickStatusChange);
+
+                row.querySelector('.ticket-row-top').addEventListener('click', (e) => {
+                    if (e.target.matches('select, .comm-icon, .card-status-select *')) return;
+                    handleMarkAsSeen(ticket.id);
+                    openModal('ticketModal', ticket.id);
+                });
+                
+                if (checklist) {
+                    row.querySelectorAll('.toggle-checklist').forEach(btn => {
+                        btn.addEventListener('click', e => {
+                            e.stopPropagation();
+                            const container = e.target.previousElementSibling;
+                            container.classList.toggle('expanded');
+                            e.target.textContent = container.classList.contains('expanded') ? 'Mostrar menos' : 'Mostrar mais...';
+                        });
+                    });
+
+                    row.querySelectorAll('.checklist-item').forEach(item => {
+                        item.addEventListener('click', e => {
+                            e.stopPropagation();
+                            const checkbox = item.querySelector('input[type="checkbox"]');
+                            if (e.target !== checkbox) checkbox.checked = !checkbox.checked;
+                            handleSubtaskCheck(ticket.id, checkbox.dataset.taskName, checkbox.checked);
+                        });
+                    });
+                }
+
+                return row;
             };
 
             const getFilteredTickets = async () => {
@@ -1221,7 +1385,7 @@
                 const ticket = tickets.find(t => t.id === ticketId);
                 if (ticket) {
                     updateLastSeenTimestamp(ticket);
-                    saveData();
+                    saveData(false); // Não conta como uma edição para backup
                     const currentElement = document.querySelector(`.ticket-card[data-id="${ticketId}"], .ticket-row[data-id="${ticketId}"]`);
                     if (currentElement) {
                         const lastSeenEl = currentElement.querySelector('.last-seen-text');
