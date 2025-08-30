@@ -337,7 +337,7 @@
         
         .communication-status {
             display: flex;
-            gap: 8px;
+            gap: 4px; /* Tighter spacing */
         }
 
         .comm-icon {
@@ -357,6 +357,19 @@
         }
         .comm-icon:hover {
             transform: scale(1.1);
+        }
+
+        .icon-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background-color: var(--bg-color);
+            padding: 2px 6px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+        }
+        .icon-group .copy-icon {
+            padding: 2px;
         }
         
         .ticket-priority { padding: 3px 8px; border-radius: 10px; font-size: 0.8em; color: white; font-weight: bold; }
@@ -1051,6 +1064,10 @@
                 if (ticket.user) iconsHTML += createCopyIconHTML('usuário', ticket.user);
                 if (ticket.password) iconsHTML += createCopyIconHTML('senha', ticket.password);
 
+                const iconGroupContent = iconsHTML + communicationHTML;
+                const iconGroupHTML = iconGroupContent ? `<div class="icon-group">${iconGroupContent}</div>` : '';
+
+
                 const checklist = createChecklistHTML(ticket.subtasks, ticket.id, false);
                 const checklistHTML = checklist ? `
                     <div class="checklist">
@@ -1072,8 +1089,7 @@
                     </div>
                     <div class="ticket-footer">
                         <div class="footer-left">
-                           ${iconsHTML}
-                           ${communicationHTML}
+                           ${iconGroupHTML}
                            <span class="last-seen">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z"/><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/></svg>
                                 <span class="last-seen-text">${formatTimeAgo(ticket.lastSeen)}</span>
@@ -1138,6 +1154,9 @@
                 if (ticket.user) iconsHTML += createCopyIconHTML('usuário', ticket.user);
                 if (ticket.password) iconsHTML += createCopyIconHTML('senha', ticket.password);
 
+                const iconGroupContent = iconsHTML + communicationHTML;
+                const iconGroupHTML = iconGroupContent ? `<div class="icon-group">${iconGroupContent}</div>` : '';
+
                 const checklist = createChecklistHTML(ticket.subtasks, ticket.id, true);
                 const checklistProgressHTML = checklist ? checklist.progressHTML : '<div style="width: 120px;"></div>'; // Placeholder for alignment
                 const checklistItemsHTML = checklist ? `<div class="ticket-row-bottom">${checklist.itemsContainerHTML}</div>` : '';
@@ -1148,9 +1167,8 @@
                             <strong>${ticket.title}</strong>
                         </div>
                         <div class="ticket-row-right">
-                            ${iconsHTML}
+                            ${iconGroupHTML}
                             ${checklistProgressHTML}
-                            ${communicationHTML}
                             <span class="last-seen" title="Última visualização">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z"/><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/></svg>
                                 <span class="last-seen-text">${formatTimeAgo(ticket.lastSeen)}</span>
@@ -1849,3 +1867,4 @@
     </script>
 </body>
 </html>
+
