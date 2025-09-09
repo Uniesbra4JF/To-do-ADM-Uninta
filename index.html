@@ -858,11 +858,18 @@
             };
             const tagColors = ['#4a4e69', '#9a8c98', '#c9ada7', '#f2e9e4', '#22223b'];
             
-            // --- MODAL GENÉRICO ---
+            // --- FUNÇÕES UTILITÁRIAS ---
+            const normalizeText = (text) => {
+                if (!text) return '';
+                return text
+                    .toLowerCase()
+                    .normalize("NFD")
+                    .replace(/[\u0300-\u036f]/g, "");
+            };
+            
             const showModal = (title, message, buttons) => {
                 return new Promise((resolve) => {
                     const modal = document.getElementById('alertModal');
-                    const modalContent = modal.querySelector('.modal-content');
                     const modalTitle = document.getElementById('alertModalTitle');
                     const modalMessage = document.getElementById('alertModalMessage');
                     const modalButtons = document.getElementById('alertModalButtons');
@@ -870,7 +877,7 @@
 
                     modalTitle.textContent = title;
                     modalMessage.innerHTML = message;
-                    modalButtons.innerHTML = ''; // Limpa botões antigos
+                    modalButtons.innerHTML = ''; 
 
                     const closeHandler = (value) => {
                         modal.style.display = 'none';
@@ -1271,30 +1278,30 @@
             };
 
             const getFilteredTickets = async () => {
-                const searchTerm = searchInput.value.toLowerCase();
+                const normalizedSearchTerm = normalizeText(searchInput.value);
                 
                 let baseTickets = tickets;
 
-                if (searchMode.checked && searchTerm) {
+                if (searchMode.checked && normalizedSearchTerm) {
                     searchInput.disabled = true;
                     searchInput.placeholder = 'Pesquisando com IA...';
                     try {
-                        const aiFilteredIds = await performAISearch(searchTerm);
+                        const aiFilteredIds = await performAISearch(normalizedSearchTerm);
                         baseTickets = tickets.filter(t => aiFilteredIds.includes(t.id));
                     } catch (error) {
                         await showModal('Erro na Busca', `Erro na busca com IA: ${error.message}`, [{ text: 'OK', value: 'ok', class: 'btn-cancel' }]);
                         baseTickets = tickets.filter(ticket => 
-                            (ticket.title && ticket.title.toLowerCase().includes(searchTerm)) ||
-                            (ticket.subtasks && ticket.subtasks.some(r => r.name.toLowerCase().includes(searchTerm)))
+                            (normalizeText(ticket.title).includes(normalizedSearchTerm)) ||
+                            (ticket.subtasks && ticket.subtasks.some(r => normalizeText(r.name).includes(normalizedSearchTerm)))
                         );
                     } finally {
                         searchInput.disabled = false;
                         searchInput.placeholder = 'Buscar...';
                     }
-                } else if (searchTerm) {
+                } else if (normalizedSearchTerm) {
                     baseTickets = tickets.filter(ticket => 
-                        (ticket.title && ticket.title.toLowerCase().includes(searchTerm)) ||
-                        (ticket.subtasks && ticket.subtasks.some(r => r.name.toLowerCase().includes(searchTerm)))
+                        (normalizeText(ticket.title).includes(normalizedSearchTerm)) ||
+                        (ticket.subtasks && ticket.subtasks.some(r => normalizeText(r.name).includes(normalizedSearchTerm)))
                     );
                 }
 
@@ -1338,12 +1345,12 @@
             const generateTagsForTicket = async (ticket) => {
                 if (!googleApiKey) {
                     console.error("Chave de API do Google não definida.");
-                    return; // Retorna silenciosamente se a chave não estiver definida
+                    return;
                 }
 
                 const pendingSubtasks = ticket.subtasks.filter(st => !st.completed).map(st => st.name);
                 if (pendingSubtasks.length === 0) {
-                    ticket.tags = []; // Limpa as tags se não houver pendências
+                    ticket.tags = [];
                     return;
                 }
                 
@@ -1503,6 +1510,19 @@
             const handleFormSubmit = async (e) => {
                 e.preventDefault();
                 const id = document.getElementById('ticketId').value;
+                const newTitle = capitalizeWords(document.getElementById('ticketTitle').value.trim());
+
+                const normalizedNewTitle = newTitle.toLowerCase();
+                const isDuplicate = tickets.some(ticket => 
+                    ticket.id !== id && 
+                    ticket.title.toLowerCase() === normalizedNewTitle
+                );
+
+                if (isDuplicate) {
+                    await showModal('Título Duplicado', 'Já existe um card com este título. Por favor, use um título diferente.', [{ text: 'OK', value: 'ok', class: 'btn-cancel' }]);
+                    return;
+                }
+                
                 const originalTicket = id ? { ...tickets.find(t => t.id === id) } : null;
                 
                 const newSubtasksString = document.getElementById('ticketSubtasks').value.trim();
@@ -1515,7 +1535,7 @@
 
                 const ticketData = {
                     id: id || Date.now().toString(),
-                    title: capitalizeWords(document.getElementById('ticketTitle').value.trim()),
+                    title: newTitle,
                     status: document.getElementById('ticketStatus').value,
                     startDate: document.getElementById('ticketStartDate').value,
                     deadline: document.getElementById('ticketDeadline').value,
