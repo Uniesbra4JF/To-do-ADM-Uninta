@@ -672,6 +672,15 @@
             animation: flash 1s ease-out;
         }
         
+        @keyframes focus-highlight {
+            0% { box-shadow: 0 0 0px var(--ai-glow-start); }
+            50% { box-shadow: 0 0 25px var(--ai-glow-start); }
+            100% { box-shadow: 0 0 0px var(--ai-glow-start); }
+        }
+        .focus-highlight {
+            animation: focus-highlight 2s ease-in-out;
+        }
+        
         @property --border-angle { syntax: "<angle>"; inherits: true; initial-value: 0deg; }
 
         @media (max-width: 900px) {
@@ -706,6 +715,7 @@
                 <button class="menu-button dropdown-toggle ai-button">✨ IA ▾</button>
                 <div class="dropdown-content">
                     <button id="generateTagsBtn" class="dropdown-item">Gerar/Atualizar Tags</button>
+                    <button id="smartFocusBtn" class="dropdown-item">Foco Inteligente</button>
                 </div>
             </div>
         </div>
@@ -747,6 +757,12 @@
                 <div class="dropdown-content">
                     <button id="setApiKeyBtn" class="dropdown-item">Definir Chave de API</button>
                     <button id="autoBackupBtn" class="dropdown-item">Backup Automático...</button>
+                    <button id="archiveTasksBtn" class="dropdown-item">Arquivar Concluídas (+30d)</button>
+                    <div class="dropdown-item">
+                        <label style="cursor: pointer; display: flex; align-items: center; width: 100%;">
+                            <input type="checkbox" id="showArchivedToggle" style="margin-right: 10px;"> Ver Arquivados
+                        </label>
+                    </div>
                 </div>
             </div>
         </div>
@@ -850,11 +866,16 @@
             const notificationCount = document.getElementById('notification-count');
             const prioritySortToggle = document.getElementById('prioritySortToggle');
             const generateTagsBtn = document.getElementById('generateTagsBtn');
+            const smartFocusBtn = document.getElementById('smartFocusBtn');
+            const archiveTasksBtn = document.getElementById('archiveTasksBtn');
+            const showArchivedToggle = document.getElementById('showArchivedToggle');
+
 
             let tickets = [];
             let googleApiKey = '';
             let editCount = 0;
             let autoBackupCount = 5; // Default
+            let focusTicketId = null; // Para o Foco Inteligente
             const statuses = ['Aberto', 'Andamento', 'Aguardando', 'Finalizado'];
             const statusColors = {
                 Aberto: 'var(--status-aberto)', Andamento: 'var(--status-andamento)',
@@ -947,6 +968,9 @@
                 if (!normalized.user) normalized.user = '';
                 if (!normalized.password) normalized.password = '';
                 if (!normalized.tags) normalized.tags = [];
+                if (typeof normalized.archived === 'undefined') normalized.archived = false;
+                if (!normalized.completionDate) normalized.completionDate = null;
+
 
                 return normalized;
             };
@@ -973,11 +997,33 @@
             };
 
             // --- RENDERIZAÇÃO DA UI ---
+            const toggleUIForView = (isArchivedView, isFocusView) => {
+                addTicketFab.style.display = isArchivedView || isFocusView ? 'none' : 'block';
+                const controlsToToggle = [filterStatus, showCompletedCheckbox, searchInput, searchMode, prioritySortToggle, generateTagsBtn.parentElement.querySelector('.ai-button')];
+                controlsToToggle.forEach(control => {
+                    if (control) control.disabled = isArchivedView || isFocusView;
+                });
+
+                if (isArchivedView || isFocusView) {
+                    filterStatus.value = ''; // Reseta o filtro de status
+                }
+            };
+
+
             const renderBoard = async () => {
+                const showArchived = showArchivedToggle.checked;
+                const isFocus = !!focusTicketId;
+                toggleUIForView(showArchived, isFocus);
+
                 const filteredTickets = await getFilteredTickets();
                 kanbanBoard.innerHTML = ''; 
-                
-                if (filterStatus.value) { 
+
+                if (isFocus) {
+                    renderListView(filteredTickets); // Focus mode sempre usa a list view para um card.
+                } else if (showArchived) {
+                    kanbanBoard.innerHTML = '<h2 style="padding: 20px 20px 0; color: #aaa;">Tarefas Arquivadas</h2>';
+                    renderListView(filteredTickets);
+                } else if (filterStatus.value) { 
                     renderListView(filteredTickets.filter(t => t.status === filterStatus.value));
                 } else { 
                     renderKanbanView(filteredTickets);
@@ -988,7 +1034,7 @@
             const renderKanbanView = (filteredTickets) => {
                 kanbanBoard.className = ''; 
                 kanbanBoard.style.padding = '20px'; 
-                if (filteredTickets.length === 0 && tickets.length > 0) {
+                if (filteredTickets.length === 0 && tickets.length > 0 && !showArchivedToggle.checked) {
                     kanbanBoard.innerHTML = '<p style="padding: 20px; color: #aaa;">Nenhum ticket encontrado com os filtros atuais.</p>';
                 }
                 
@@ -1028,15 +1074,18 @@
             };
 
             const renderListView = (ticketsToList) => {
+                const isArchivedView = showArchivedToggle.checked;
                 kanbanBoard.className = 'list-view';
-                kanbanBoard.style.padding = '0'; 
+                if(!isArchivedView) kanbanBoard.style.padding = '0'; 
                 
                 if (ticketsToList.length === 0) {
-                    kanbanBoard.innerHTML = '<p style="padding: 20px; color: #aaa;">Nenhum ticket encontrado para este status.</p>';
+                     if (!isArchivedView) {
+                        kanbanBoard.innerHTML = '<p style="padding: 20px; color: #aaa;">Nenhum ticket encontrado para este status.</p>';
+                     }
                     return;
                 }
 
-                if (prioritySortToggle.checked) {
+                if (prioritySortToggle.checked && !isArchivedView) {
                     const priorityOrder = { 'Alta': 0, 'Media': 1, 'Baixa': 2 };
                     ticketsToList.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
                 }
@@ -1202,8 +1251,8 @@
 
                 const now = new Date();
                 const deadline = new Date(ticket.deadline);
-                const isOverdue = deadline < now && ticket.status !== 'Finalizado';
-                const nearingDeadline = !isOverdue && (deadline - now) / (1000 * 3600) <= 24 && ticket.status !== 'Finalizado';
+                const isOverdue = deadline < now && ticket.status !== 'Finalizado' && !ticket.archived;
+                const nearingDeadline = !isOverdue && (deadline - now) / (1000 * 3600) <= 24 && ticket.status !== 'Finalizado' && !ticket.archived;
 
                 let communicationHTML = '';
                 if (ticket.aviseiRegiana || ticket.comuniqueiAluno || ticket.aguardandoRetorno) {
@@ -1244,9 +1293,9 @@
                             </span>
                             <span class="ticket-priority" style="background-color: ${priorityColors[ticket.priority]}">${ticket.priority}</span>
                             <div class="deadline-wrapper ${isOverdue || nearingDeadline ? 'alert' : ''}">
-                                <span>${new Date(ticket.deadline).toLocaleDateString()}</span>
+                                <span>${ticket.archived ? `Concluído: ${new Date(ticket.completionDate).toLocaleDateString()}` : `Prazo: ${new Date(ticket.deadline).toLocaleDateString()}`}</span>
                             </div>
-                            <select data-id="${ticket.id}" class="card-status-select">
+                            <select data-id="${ticket.id}" class="card-status-select" ${ticket.archived ? 'disabled' : ''}>
                                 ${statuses.map(s => `<option value="${s}" ${s === ticket.status ? 'selected' : ''}>${s}</option>`).join('')}
                             </select>
                         </div>
@@ -1255,7 +1304,7 @@
                 `;
 
                 row.querySelector('.ticket-row-top').addEventListener('click', (e) => {
-                    if (e.target.closest('.card-status-select, .comm-icon, .copy-icon')) {
+                    if (e.target.closest('.card-status-select, .comm-icon, .copy-icon, .toggle-checklist')) {
                         return;
                     }
                     handleMarkAsSeen(ticket.id);
@@ -1288,28 +1337,35 @@
             };
 
             const getFilteredTickets = async () => {
+                // Foco Inteligente tem a maior prioridade
+                if (focusTicketId) {
+                    return tickets.filter(t => t.id === focusTicketId);
+                }
+
+                const showArchived = showArchivedToggle.checked;
+                let baseTickets = tickets.filter(t => t.archived === showArchived);
+
+                if (showArchived) {
+                    baseTickets.sort((a, b) => new Date(b.completionDate) - new Date(a.completionDate));
+                    return baseTickets;
+                }
+
                 const normalizedSearchTerm = normalizeText(searchInput.value);
                 
-                let baseTickets = tickets;
-
                 if (searchMode.checked && normalizedSearchTerm) {
                     searchInput.disabled = true;
                     searchInput.placeholder = 'Pesquisando com IA...';
                     try {
-                        const aiFilteredIds = await performAISearch(normalizedSearchTerm);
-                        baseTickets = tickets.filter(t => aiFilteredIds.includes(t.id));
+                        const aiFilteredIds = await performAISearch(normalizedSearchTerm, baseTickets);
+                        baseTickets = baseTickets.filter(t => aiFilteredIds.includes(t.id));
                     } catch (error) {
                         await showModal('Erro na Busca', `Erro na busca com IA: ${error.message}`, [{ text: 'OK', value: 'ok', class: 'btn-cancel' }]);
-                        baseTickets = tickets.filter(ticket => 
-                            (normalizeText(ticket.title).includes(normalizedSearchTerm)) ||
-                            (ticket.subtasks && ticket.subtasks.some(r => normalizeText(r.name).includes(normalizedSearchTerm)))
-                        );
                     } finally {
                         searchInput.disabled = false;
                         searchInput.placeholder = 'Buscar...';
                     }
                 } else if (normalizedSearchTerm) {
-                    baseTickets = tickets.filter(ticket => 
+                    baseTickets = baseTickets.filter(ticket => 
                         (normalizeText(ticket.title).includes(normalizedSearchTerm)) ||
                         (ticket.subtasks && ticket.subtasks.some(r => normalizeText(r.name).includes(normalizedSearchTerm)))
                     );
@@ -1321,12 +1377,36 @@
             };
 
             // --- LÓGICA DE IA ---
-            const performAISearch = async (query) => {
+            const fetchWithRetry = async (url, options, retries = 3, delay = 1000) => {
+                for (let i = 0; i < retries; i++) {
+                    try {
+                        const response = await fetch(url, options);
+                        // Check for specific retryable status codes
+                        if ([429, 503].includes(response.status)) {
+                             throw new Error(`O modelo está sobrecarregado. Status: ${response.status}`);
+                        }
+                        if (!response.ok) {
+                            const error = await response.json();
+                            throw new Error(error?.error?.message || `HTTP error! status: ${response.status}`);
+                        }
+                        return response; // Success
+                    } catch (error) {
+                        console.warn(`Tentativa ${i + 1} falhou: ${error.message}. Tentando novamente em ${delay / 1000}s...`);
+                        if (i < retries - 1) {
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                            delay *= 2; // Exponential backoff
+                        } else {
+                            throw new Error(error.message.replace('permission', 'permissão')); // Translate common error parts
+                        }
+                    }
+                }
+            };
+            
+            const performAISearch = async (query, ticketsToSearch) => {
                 if (!googleApiKey) throw new Error("Chave de API do Google não definida. Por favor, defina nas configurações.");
                 
                 const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${googleApiKey}`;
                 
-                let ticketsToSearch = showCompletedCheckbox.checked ? tickets : tickets.filter(t => t.status !== 'Finalizado');
                 const simplifiedTickets = ticketsToSearch.map(({ id, title, subtasks, priority, deadline }) => ({ 
                     id, 
                     title, 
@@ -1337,16 +1417,11 @@
 
                 const prompt = `Você é um assistente de kanban. Analise as tarefas JSON. A data atual é ${new Date().toLocaleDateString()}. Pesquisa do usuário: "${query}". Retorne um array JSON com os IDs das tarefas mais relevantes. Lista: ${JSON.stringify(simplifiedTickets)}. Responda apenas com o array de IDs.`;
 
-                const response = await fetch(API_URL, {
+                const response = await fetchWithRetry(API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { response_mime_type: "application/json" } })
                 });
-
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.error.message || "Erro na API do Google.");
-                }
 
                 const data = await response.json();
                 return JSON.parse(data.candidates[0].content.parts[0].text);
@@ -1369,15 +1444,12 @@
                 const prompt = `Analise a seguinte lista de tarefas pendentes: "${subtasksText}". Com base nelas, gere até 4 tags curtas de uma ou duas palavras que resumam os temas principais. Retorne as tags em um array JSON. Exemplo: ["Contrato", "Financeiro", "Documentação"]`;
 
                 try {
-                    const response = await fetch(API_URL, {
+                    const response = await fetchWithRetry(API_URL, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { response_mime_type: "application/json" } })
                     });
-                    if (!response.ok) {
-                        const error = await response.json();
-                        throw new Error(error.error.message || "Erro ao gerar tags.");
-                    }
+                    
                     const data = await response.json();
                     const newTags = JSON.parse(data.candidates[0].content.parts[0].text);
                     if (Array.isArray(newTags)) {
@@ -1388,6 +1460,65 @@
                 }
             };
 
+            const handleSmartFocus = async () => {
+                 if (focusTicketId) { // Se já estiver em modo foco, limpa o foco
+                    focusTicketId = null;
+                    smartFocusBtn.textContent = 'Foco Inteligente';
+                    renderBoard();
+                    return;
+                }
+
+                if (!googleApiKey) {
+                    await showModal('Aviso', 'Por favor, defina sua Chave de API do Google nas configurações (⚙️) antes de usar as funções de IA.', [{ text: 'OK', value: 'ok', class: 'btn-cancel' }]);
+                    return;
+                }
+
+                const activeTickets = tickets.filter(t => t.status !== 'Finalizado' && !t.archived);
+
+                if (activeTickets.length === 0) {
+                    await showModal('Foco Inteligente', 'Parabéns! Você não tem nenhuma tarefa ativa para focar.', [{ text: 'OK', value: 'ok', class: 'btn-save' }]);
+                    return;
+                }
+
+                smartFocusBtn.textContent = 'Analisando...';
+                smartFocusBtn.disabled = true;
+
+                try {
+                    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${googleApiKey}`;
+                    const simplifiedTickets = activeTickets.map(({ id, title, priority, deadline, status }) => ({ id, title, priority, deadline, status }));
+                    const today = new Date().toISOString().split('T')[0];
+                    const prompt = `Você é um assistente de produtividade. A data de hoje é ${today}. Com base na lista de tarefas a seguir, qual é a tarefa MAIS IMPORTANTE que o usuário deve focar agora? Considere a prioridade mais alta e o prazo mais próximo como fatores principais. Retorne APENAS o 'id' da tarefa sugerida em formato JSON, como {"id": "12345"}. Lista de tarefas: ${JSON.stringify(simplifiedTickets)}`;
+
+                    const response = await fetchWithRetry(API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { response_mime_type: "application/json" } })
+                    });
+                    
+                    const data = await response.json();
+                    const result = JSON.parse(data.candidates[0].content.parts[0].text);
+                    const recommendedId = result.id;
+                    
+                    if (recommendedId) {
+                        focusTicketId = recommendedId;
+                        smartFocusBtn.textContent = 'Limpar Foco ✨';
+                        if (showArchivedToggle.checked) {
+                            showArchivedToggle.checked = false;
+                        }
+                        renderBoard();
+                    } else {
+                        throw new Error("A IA não retornou uma tarefa recomendada.");
+                    }
+
+                } catch (error) {
+                    await showModal('Erro', `Não foi possível sugerir uma tarefa: ${error.message}`, [{ text: 'OK', value: 'ok', class: 'btn-cancel' }]);
+                } finally {
+                    if(!focusTicketId) smartFocusBtn.textContent = 'Foco Inteligente';
+                    smartFocusBtn.disabled = false;
+                }
+            };
+
+
             // --- NOTIFICAÇÕES ---
             const renderNotifications = () => {
                 notificationList.innerHTML = '';
@@ -1395,7 +1526,7 @@
                 let count = 0;
 
                 const urgentTickets = tickets.filter(ticket => {
-                    if (ticket.status === 'Finalizado') return false;
+                    if (ticket.status === 'Finalizado' || ticket.archived) return false;
                     const deadline = new Date(ticket.deadline);
                     const hoursRemaining = (deadline - now) / (1000 * 3600);
                     return hoursRemaining <= 24;
@@ -1443,7 +1574,7 @@
             const checkDeadlinesForDesktop = () => {
                 const now = new Date();
                 tickets.forEach(ticket => {
-                    if (ticket.status === 'Finalizado') return;
+                    if (ticket.status === 'Finalizado' || ticket.archived) return;
                     const deadline = new Date(ticket.deadline);
                     const hoursRemaining = (deadline - now) / (1000 * 3600);
                     if (hoursRemaining > 0 && hoursRemaining <= 24) {
@@ -1525,11 +1656,12 @@
                 const normalizedNewTitle = newTitle.toLowerCase();
                 const isDuplicate = tickets.some(ticket => 
                     ticket.id !== id && 
-                    ticket.title.toLowerCase() === normalizedNewTitle
+                    ticket.title.toLowerCase() === normalizedNewTitle &&
+                    !ticket.archived
                 );
 
                 if (isDuplicate) {
-                    await showModal('Título Duplicado', 'Já existe um card com este título. Por favor, use um título diferente.', [{ text: 'OK', value: 'ok', class: 'btn-cancel' }]);
+                    await showModal('Título Duplicado', 'Já existe um card ativo com este título. Por favor, use um título diferente.', [{ text: 'OK', value: 'ok', class: 'btn-cancel' }]);
                     return;
                 }
                 
@@ -1558,8 +1690,19 @@
                     aguardandoRetorno: document.getElementById('ticketAguardandoRetorno').checked,
                     history: originalTicket?.history || [],
                     tags: originalTicket?.tags || [],
+                    archived: originalTicket?.archived || false,
                     lastSeen: new Date().toISOString()
                 };
+
+                // Lógica de Data de Conclusão
+                if (originalTicket && originalTicket.status !== 'Finalizado' && ticketData.status === 'Finalizado') {
+                    ticketData.completionDate = new Date().toISOString();
+                } else if (originalTicket && originalTicket.status === 'Finalizado' && ticketData.status !== 'Finalizado') {
+                    ticketData.completionDate = null;
+                } else {
+                    ticketData.completionDate = originalTicket?.completionDate || null;
+                }
+
 
                 await generateTagsForTicket(ticketData);
 
@@ -1630,7 +1773,15 @@
 
                 if (ticketToUpdate && ticketToUpdate.status !== newStatus) {
                     addLogEntry(ticketToUpdate, `Status alterado de "${ticketToUpdate.status}" para "${newStatus}"`);
+                    const oldStatus = ticketToUpdate.status;
                     ticketToUpdate.status = newStatus;
+
+                    if (newStatus === 'Finalizado' && oldStatus !== 'Finalizado') {
+                        ticketToUpdate.completionDate = new Date().toISOString();
+                    } else if (newStatus !== 'Finalizado' && oldStatus === 'Finalizado') {
+                        ticketToUpdate.completionDate = null;
+                    }
+
                     updateLastSeenTimestamp(ticketToUpdate);
                     saveData();
                     renderBoard();
@@ -1702,7 +1853,15 @@
                         const newStatus = column.dataset.status;
                         if (ticket.status !== newStatus) {
                             addLogEntry(ticket, `Status movido de "${ticket.status}" para "${newStatus}"`);
+                            const oldStatus = ticket.status;
                             ticket.status = newStatus;
+
+                            if (newStatus === 'Finalizado' && oldStatus !== 'Finalizado') {
+                                ticket.completionDate = new Date().toISOString();
+                            } else if (newStatus !== 'Finalizado' && oldStatus === 'Finalizado') {
+                                ticket.completionDate = null;
+                            }
+
                             updateLastSeenTimestamp(ticket);
                             saveData();
                             renderBoard();
@@ -1796,7 +1955,7 @@
                 };
                 reader.readAsText(file);
             };
-
+            
             const handleAutoBackup = () => {
                 if (tickets.length === 0) return; 
 
@@ -1850,6 +2009,29 @@
                     }
                 }
             };
+            
+            const archiveOldTasks = async () => {
+                const thirtyDaysAgo = new Date();
+                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+                let archivedCount = 0;
+
+                tickets.forEach(ticket => {
+                    if (ticket.status === 'Finalizado' && !ticket.archived && ticket.completionDate) {
+                        if (new Date(ticket.completionDate) < thirtyDaysAgo) {
+                            ticket.archived = true;
+                            archivedCount++;
+                        }
+                    }
+                });
+
+                if (archivedCount > 0) {
+                    saveData();
+                    renderBoard();
+                    await showModal('Sucesso', `${archivedCount} tarefa(s) concluída(s) há mais de 30 dias foram arquivadas.`, [{ text: 'OK', value: 'ok', class: 'btn-save' }]);
+                } else {
+                    await showModal('Aviso', 'Nenhuma tarefa concluída há mais de 30 dias para arquivar.', [{ text: 'OK', value: 'ok', class: 'btn-cancel' }]);
+                }
+            };
 
             const formatTimeAgo = (isoString) => {
                 if (!isoString) return '';
@@ -1901,6 +2083,10 @@
             document.getElementById('deleteTicketBtn').addEventListener('click', handleDeleteTicket);
             document.getElementById('setApiKeyBtn').addEventListener('click', handleSetApiKey);
             document.getElementById('autoBackupBtn').addEventListener('click', handleAutoBackupSettings);
+            archiveTasksBtn.addEventListener('click', archiveOldTasks);
+            showArchivedToggle.addEventListener('change', renderBoard);
+            smartFocusBtn.addEventListener('click', handleSmartFocus);
+
 
             generateTagsBtn.addEventListener('click', async () => {
                 if (!googleApiKey) {
@@ -1911,7 +2097,7 @@
                 generateTagsBtn.disabled = true;
 
                 for (const ticket of tickets) {
-                    await generateTagsForTicket(ticket);
+                    if(!ticket.archived) await generateTagsForTicket(ticket);
                 }
                 
                 saveData(false); // Salva sem contar como edição
@@ -2009,5 +2195,4 @@
     </script>
 </body>
 </html>
-
 
