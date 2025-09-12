@@ -463,10 +463,6 @@
             align-items: center;
             gap: 8px;
             padding: 4px 0;
-            cursor: pointer;
-        }
-        .checklist-item input[type="checkbox"] {
-            flex-shrink: 0;
         }
         .checklist-item label {
             flex-grow: 1;
@@ -474,6 +470,7 @@
             white-space: normal;
             word-break: break-word;
             min-width: 0; /* FIX para overflow de texto em flex containers */
+            cursor: pointer;
         }
         .checklist-item input[type="checkbox"]:checked + label {
             text-decoration: line-through;
@@ -492,6 +489,32 @@
             text-align: left;
         }
         
+        .subtask-comms {
+            display: flex;
+            gap: 4px;
+            margin-left: auto; /* Pushes icons to the right */
+        }
+        .subtask-comm-icon {
+            font-size: 10px;
+            font-weight: bold;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border: 1px solid var(--border-color);
+            background-color: var(--surface-hover-color);
+            color: #666; /* Inactive color */
+            transition: background-color 0.2s, color 0.2s;
+        }
+        .subtask-comm-icon.active {
+            background-color: var(--primary-accent);
+            color: white;
+            border-color: var(--primary-accent);
+        }
+
         /* --- VISUALIZAÇÃO EM LISTA --- */
         main.list-view {
             flex-direction: column;
@@ -960,6 +983,15 @@
                 }
 
                 if (!normalized.subtasks) normalized.subtasks = [];
+
+                normalized.subtasks = normalized.subtasks.map(st => ({
+                    name: st.name,
+                    completed: st.completed || false,
+                    aviseiAluno: st.aviseiAluno || false,
+                    aviseiRegiana: st.aviseiRegiana || false,
+                }));
+
+
                 if (!normalized.history) normalized.history = [];
                 if (typeof normalized.aviseiRegiana === 'undefined') normalized.aviseiRegiana = false;
                 if (typeof normalized.comuniqueiAluno === 'undefined') normalized.comuniqueiAluno = false;
@@ -1104,12 +1136,19 @@
                 const totalCount = subtasks.length;
                 const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
 
-                const itemsHTML = sortedTasks.map((task, index) => `
+                const itemsHTML = sortedTasks.map((task, index) => {
+                    const aviseiAlunoClass = task.aviseiAluno ? 'active' : '';
+                    const aviseiRegianaClass = task.aviseiRegiana ? 'active' : '';
+                    return `
                     <div class="checklist-item">
                         <input type="checkbox" id="task-${ticketId}-${index}" data-task-name="${task.name}" ${task.completed ? 'checked' : ''}>
                         <label for="task-${ticketId}-${index}">${task.name}</label>
+                        <div class="subtask-comms">
+                            <span class="subtask-comm-icon ${aviseiAlunoClass}" data-type="aluno" data-task-name="${task.name}" title="Avisar Aluno">A</span>
+                            <span class="subtask-comm-icon ${aviseiRegianaClass}" data-type="regiana" data-task-name="${task.name}" title="Avisar Regiana">R</span>
+                        </div>
                     </div>
-                `).join('');
+                `}).join('');
 
                 const progressHTML = `
                     <div class="checklist-progress">
@@ -1218,7 +1257,7 @@
                 card.querySelector('.card-status-select').addEventListener('change', handleQuickStatusChange);
 
                 card.addEventListener('click', (e) => {
-                    if (e.target.closest('.copy-icon')) {
+                    if (e.target.closest('.copy-icon, .subtask-comm-icon')) {
                         return;
                     }
                     if (e.target.classList.contains('toggle-checklist')) {
@@ -1304,7 +1343,7 @@
                 `;
 
                 row.querySelector('.ticket-row-top').addEventListener('click', (e) => {
-                    if (e.target.closest('.card-status-select, .comm-icon, .copy-icon, .toggle-checklist')) {
+                    if (e.target.closest('.card-status-select, .comm-icon, .copy-icon, .toggle-checklist, .subtask-comm-icon')) {
                         return;
                     }
                     handleMarkAsSeen(ticket.id);
@@ -1325,6 +1364,7 @@
                     }
                     row.querySelectorAll('.checklist-item').forEach(item => {
                         item.addEventListener('click', e => {
+                            if(e.target.closest('.subtask-comm-icon')) return;
                             e.stopPropagation();
                             const checkbox = item.querySelector('input[type="checkbox"]');
                             if (e.target !== checkbox) checkbox.checked = !checkbox.checked;
@@ -1672,7 +1712,12 @@
                 
                 const newSubtasks = newSubtasksNames.map(name => {
                     const existingTask = originalTicket?.subtasks.find(r => r.name === name);
-                    return { name: name, completed: existingTask ? existingTask.completed : false };
+                    return { 
+                        name: name, 
+                        completed: existingTask ? existingTask.completed : false,
+                        aviseiAluno: existingTask ? existingTask.aviseiAluno : false,
+                        aviseiRegiana: existingTask ? existingTask.aviseiRegiana : false,
+                    };
                 });
 
                 const ticketData = {
@@ -1785,6 +1830,43 @@
                     updateLastSeenTimestamp(ticketToUpdate);
                     saveData();
                     renderBoard();
+                }
+            };
+
+            const handleSubtaskCommToggle = (ticketId, taskName, type) => {
+                const ticket = tickets.find(t => t.id === ticketId);
+                if (!ticket) return;
+
+                const task = ticket.subtasks.find(r => r.name === taskName);
+                if (!task) return;
+
+                let actionLog = '';
+                if (type === 'aluno') {
+                    task.aviseiAluno = !task.aviseiAluno;
+                    actionLog = `marcado como 'avisado' para o aluno`;
+                    if (!task.aviseiAluno) actionLog = `desmarcado como 'avisado' para o aluno`;
+                } else if (type === 'regiana') {
+                    task.aviseiRegiana = !task.aviseiRegiana;
+                    actionLog = `marcado como 'avisado' para a Regiana`;
+                    if (!task.aviseiRegiana) actionLog = `desmarcado como 'avisado' para a Regiana`;
+                }
+                
+                addLogEntry(ticket, `Sub-tarefa "${taskName}" ${actionLog}.`);
+                updateLastSeenTimestamp(ticket);
+                saveData();
+
+                // Refresh only the affected card/row
+                const currentElement = document.querySelector(`.ticket-card[data-id="${ticketId}"], .ticket-row[data-id="${ticketId}"]`);
+                if (currentElement) {
+                    let newElement;
+                    if (currentElement.classList.contains('ticket-card')) {
+                        newElement = createTicketCard(ticket);
+                    } else {
+                        newElement = createTicketRow(ticket);
+                    }
+                    currentElement.replaceWith(newElement);
+                } else {
+                    renderBoard(); // Fallback
                 }
             };
 
@@ -2147,6 +2229,17 @@
             document.getElementById('exportSelect').addEventListener('change', e => { if (e.target.value) { handleExport(e.target.value); e.target.value = ''; } });
 
             kanbanBoard.addEventListener('click', (e) => {
+                const commTarget = e.target.closest('.subtask-comm-icon');
+                if (commTarget) {
+                    e.stopPropagation();
+                    const ticketElement = commTarget.closest('.ticket-card, .ticket-row');
+                    const ticketId = ticketElement.dataset.id;
+                    const taskName = commTarget.dataset.taskName;
+                    const type = commTarget.dataset.type;
+                    handleSubtaskCommToggle(ticketId, taskName, type);
+                    return;
+                }
+
                 const copyTarget = e.target.closest('.copy-icon');
                 if (copyTarget) {
                     e.stopPropagation();
