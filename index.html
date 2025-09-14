@@ -86,6 +86,11 @@
             background-color: var(--surface-hover-color);
             border-color: var(--primary-accent);
         }
+        .menu-button.filter-active {
+            background-color: var(--primary-accent);
+            color: white;
+            border-color: var(--primary-accent-hover);
+        }
 
         .ai-button {
             background: linear-gradient(45deg, var(--ai-glow-start), var(--ai-glow-end));
@@ -640,6 +645,26 @@
         .btn-delete { background-color: var(--priority-alta); color: white; }
         .btn-cancel { background-color: var(--surface-hover-color); color: var(--font-color); }
         
+        /* Modal de Filtros */
+        #filterModal .modal-content {
+            max-width: 800px;
+        }
+        .filter-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 25px;
+        }
+        .filter-section h4 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
+        }
+        #filterTagsContainer {
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        
         /* Histórico no Modal */
         .modal-extra-section {
             margin-top: 20px; max-height: 150px; overflow-y: auto; padding: 15px; background: var(--bg-color);
@@ -743,6 +768,7 @@
             </div>
         </div>
         <div class="header-right">
+             <button id="filterBtn" class="menu-button">Filtros 🔍</button>
             <div class="menu-item">
                 <label title="Ordenar por Prioridade" style="font-size: 1.5em; cursor: pointer; display: flex; align-items: center;">
                     <input type="checkbox" id="prioritySortToggle" style="display: none;"> ⇅
@@ -751,20 +777,6 @@
             <div class="search-container">
                 <input type="text" id="searchInput" placeholder="Buscar...">
                 <input type="checkbox" id="searchMode" title="Ativar busca por IA">
-            </div>
-            <div class="menu-item">
-                <select id="filterStatus">
-                    <option value="">Todos Status</option>
-                    <option value="Aberto">Aberto</option>
-                    <option value="Andamento">Em Andamento</option>
-                    <option value="Finalizado">Finalizado</option>
-                    <option value="Aguardando">Aguardando</option>
-                </select>
-            </div>
-            <div class="menu-item">
-                <label style="font-size: 0.8em; margin-right: 5px; display: flex; align-items: center; cursor: pointer;">
-                    <input type="checkbox" id="showCompleted" checked> Mostrar Finalizados
-                </label>
             </div>
             <div class="dropdown">
                 <button id="notificationBtn" class="menu-button dropdown-toggle">
@@ -875,6 +887,50 @@
         </div>
     </div>
 
+    <!-- MODAL PARA FILTROS AVANÇADOS -->
+    <div id="filterModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <h2>Filtros Avançados</h2>
+            <div class="filter-container">
+                <div class="filter-section">
+                    <h4>Status</h4>
+                    <div id="filterStatusContainer" class="checkbox-group"></div>
+                </div>
+                <div class="filter-section">
+                    <h4>Prioridade</h4>
+                    <div id="filterPriorityContainer" class="checkbox-group"></div>
+                </div>
+                <div class="filter-section">
+                    <h4>Prazo</h4>
+                    <div class="form-field">
+                        <label for="filterStartDate">De:</label>
+                        <input type="date" id="filterStartDate">
+                    </div>
+                    <div class="form-field">
+                        <label for="filterEndDate">Até:</label>
+                        <input type="date" id="filterEndDate">
+                    </div>
+                </div>
+                <div class="filter-section">
+                    <h4>Tags</h4>
+                    <div id="filterTagsContainer" class="checkbox-group"></div>
+                </div>
+            </div>
+             <div class="filter-section" style="margin-top: 20px;">
+                 <h4>Outros</h4>
+                 <div class="checkbox-group">
+                    <label><input type="checkbox" id="showCompleted"> Mostrar Finalizados</label>
+                </div>
+             </div>
+            <div class="form-buttons">
+                <button type="button" id="clearFiltersBtn" class="btn-cancel">Limpar Filtros</button>
+                <button type="button" id="applyFiltersBtn" class="btn-save">Aplicar Filtros</button>
+            </div>
+        </div>
+    </div>
+
+
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             // --- VARIÁVEIS E CONSTANTES GLOBAIS ---
@@ -882,9 +938,7 @@
             const ticketForm = document.getElementById('ticketForm');
             const searchInput = document.getElementById('searchInput');
             const searchMode = document.getElementById('searchMode');
-            const filterStatus = document.getElementById('filterStatus');
             const addTicketFab = document.getElementById('addTicketFab');
-            const showCompletedCheckbox = document.getElementById('showCompleted');
             const notificationList = document.getElementById('notification-list');
             const notificationCount = document.getElementById('notification-count');
             const prioritySortToggle = document.getElementById('prioritySortToggle');
@@ -892,6 +946,7 @@
             const smartFocusBtn = document.getElementById('smartFocusBtn');
             const archiveTasksBtn = document.getElementById('archiveTasksBtn');
             const showArchivedToggle = document.getElementById('showArchivedToggle');
+            const filterBtn = document.getElementById('filterBtn');
 
 
             let tickets = [];
@@ -899,7 +954,17 @@
             let editCount = 0;
             let autoBackupCount = 5; // Default
             let focusTicketId = null; // Para o Foco Inteligente
+            let activeFilters = {
+                statuses: [],
+                priorities: [],
+                tags: [],
+                startDate: '',
+                endDate: '',
+                showCompleted: true,
+            };
+
             const statuses = ['Aberto', 'Andamento', 'Aguardando', 'Finalizado'];
+            const priorities = ['Alta', 'Media', 'Baixa'];
             const statusColors = {
                 Aberto: 'var(--status-aberto)', Andamento: 'var(--status-andamento)',
                 Finalizado: 'var(--status-finalizado)', Aguardando: 'var(--status-aguardando)',
@@ -1031,14 +1096,10 @@
             // --- RENDERIZAÇÃO DA UI ---
             const toggleUIForView = (isArchivedView, isFocusView) => {
                 addTicketFab.style.display = isArchivedView || isFocusView ? 'none' : 'block';
-                const controlsToToggle = [filterStatus, showCompletedCheckbox, searchInput, searchMode, prioritySortToggle, generateTagsBtn.parentElement.querySelector('.ai-button')];
+                const controlsToToggle = [filterBtn, searchInput, searchMode, prioritySortToggle, generateTagsBtn.parentElement.querySelector('.ai-button')];
                 controlsToToggle.forEach(control => {
                     if (control) control.disabled = isArchivedView || isFocusView;
                 });
-
-                if (isArchivedView || isFocusView) {
-                    filterStatus.value = ''; // Reseta o filtro de status
-                }
             };
 
 
@@ -1055,8 +1116,8 @@
                 } else if (showArchived) {
                     kanbanBoard.innerHTML = '<h2 style="padding: 20px 20px 0; color: #aaa;">Tarefas Arquivadas</h2>';
                     renderListView(filteredTickets);
-                } else if (filterStatus.value) { 
-                    renderListView(filteredTickets.filter(t => t.status === filterStatus.value));
+                } else if (activeFilters.statuses.length > 0 || activeFilters.priorities.length > 0 || activeFilters.tags.length > 0 || activeFilters.startDate || activeFilters.endDate) { 
+                    renderListView(filteredTickets);
                 } else { 
                     renderKanbanView(filteredTickets);
                     setupDragAndDrop();
@@ -1073,7 +1134,7 @@
                 const visibleStatuses = statuses;
 
                 visibleStatuses.forEach(status => {
-                    if (!showCompletedCheckbox.checked && status === 'Finalizado') return;
+                    if (!activeFilters.showCompleted && status === 'Finalizado') return;
                     
                     const column = document.createElement('div');
                     column.className = 'status-column';
@@ -1112,7 +1173,7 @@
                 
                 if (ticketsToList.length === 0) {
                      if (!isArchivedView) {
-                        kanbanBoard.innerHTML = '<p style="padding: 20px; color: #aaa;">Nenhum ticket encontrado para este status.</p>';
+                        kanbanBoard.innerHTML = '<p style="padding: 20px; color: #aaa;">Nenhum ticket encontrado para esta combinação de filtros.</p>';
                      }
                     return;
                 }
@@ -1390,14 +1451,34 @@
                     return baseTickets;
                 }
 
+                // Aplicar filtros avançados
+                let filtered = baseTickets.filter(ticket => {
+                    const statusMatch = activeFilters.statuses.length === 0 || activeFilters.statuses.includes(ticket.status);
+                    const priorityMatch = activeFilters.priorities.length === 0 || activeFilters.priorities.includes(ticket.priority);
+                    const tagsMatch = activeFilters.tags.length === 0 || activeFilters.tags.every(tag => ticket.tags.includes(tag));
+                    
+                    let dateMatch = true;
+                    if (activeFilters.startDate || activeFilters.endDate) {
+                        const deadline = new Date(ticket.deadline + 'T00:00:00'); // Ensure it's treated as local date
+                        const start = activeFilters.startDate ? new Date(activeFilters.startDate + 'T00:00:00') : null;
+                        const end = activeFilters.endDate ? new Date(activeFilters.endDate + 'T23:59:59') : null;
+                        
+                        if(start && deadline < start) dateMatch = false;
+                        if(end && deadline > end) dateMatch = false;
+                    }
+                    
+                    return statusMatch && priorityMatch && tagsMatch && dateMatch;
+                });
+                
+
                 const normalizedSearchTerm = normalizeText(searchInput.value);
                 
                 if (searchMode.checked && normalizedSearchTerm) {
                     searchInput.disabled = true;
                     searchInput.placeholder = 'Pesquisando com IA...';
                     try {
-                        const aiFilteredIds = await performAISearch(normalizedSearchTerm, baseTickets);
-                        baseTickets = baseTickets.filter(t => aiFilteredIds.includes(t.id));
+                        const aiFilteredIds = await performAISearch(normalizedSearchTerm, filtered);
+                        filtered = filtered.filter(t => aiFilteredIds.includes(t.id));
                     } catch (error) {
                         await showModal('Erro na Busca', `Erro na busca com IA: ${error.message}`, [{ text: 'OK', value: 'ok', class: 'btn-cancel' }]);
                     } finally {
@@ -1405,14 +1486,14 @@
                         searchInput.placeholder = 'Buscar...';
                     }
                 } else if (normalizedSearchTerm) {
-                    baseTickets = baseTickets.filter(ticket => 
+                    filtered = filtered.filter(ticket => 
                         (normalizeText(ticket.title).includes(normalizedSearchTerm)) ||
                         (ticket.subtasks && ticket.subtasks.some(r => normalizeText(r.name).includes(normalizedSearchTerm)))
                     );
                 }
 
-                return baseTickets.filter(ticket => {
-                    return showCompletedCheckbox.checked || ticket.status !== 'Finalizado';
+                return filtered.filter(ticket => {
+                    return activeFilters.showCompleted || ticket.status !== 'Finalizado';
                 });
             };
 
@@ -1481,7 +1562,14 @@
                 
                 const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${googleApiKey}`;
                 const subtasksText = pendingSubtasks.join(', ');
-                const prompt = `Analise a seguinte lista de tarefas pendentes: "${subtasksText}". Com base nelas, gere até 4 tags curtas de uma ou duas palavras que resumam os temas principais. Retorne as tags em um array JSON. Exemplo: ["Contrato", "Financeiro", "Documentação"]`;
+                
+                let prompt = '';
+                if (pendingSubtasks.length === 1) {
+                    prompt = `A tarefa pendente é: "${subtasksText}". Crie uma única tag que resuma esta tarefa em 3 a 4 palavras. Retorne em um array JSON contendo uma única string. Exemplo: ["Preparar documentação final"]`;
+                } else {
+                    prompt = `Analise esta lista de tarefas pendentes: "${subtasksText}". Identifique temas comuns e agrupe ideias semelhantes. Gere no máximo 3 tags que resumam os principais grupos de trabalho. Cada tag deve ser uma frase curta de 3 a 4 palavras. Por exemplo, se as tarefas forem "Aguardar histórico escolar" e "Aguardar certificado", uma boa tag consolidada seria "Aguardar documentação do aluno". Retorne as tags em um array JSON.`;
+                }
+
 
                 try {
                     const response = await fetchWithRetry(API_URL, {
@@ -1633,6 +1721,7 @@
             const openModal = (modalId, ticketId = null) => {
                 const modal = document.getElementById(modalId);
                 if (modalId === 'ticketModal') setupTicketModal(ticketId);
+                if (modalId === 'filterModal') populateFilterModal();
                 modal.style.display = 'block';
             };
 
@@ -2275,9 +2364,78 @@
                 searchTimeout = setTimeout(renderBoard, 500); // Debounce para evitar buscas excessivas
             });
             searchMode.addEventListener('change', () => searchInput.classList.toggle('ai-active', searchMode.checked));
-            filterStatus.addEventListener('change', renderBoard);
-            showCompletedCheckbox.addEventListener('change', renderBoard);
             prioritySortToggle.addEventListener('change', renderBoard);
+
+            // Filtros
+            const filterModal = document.getElementById('filterModal');
+            const applyFiltersBtn = document.getElementById('applyFiltersBtn');
+            const clearFiltersBtn = document.getElementById('clearFiltersBtn');
+            const statusFilterContainer = document.getElementById('filterStatusContainer');
+
+            const updateAvailableTagsForFilter = () => {
+                const selectedStatuses = [...statusFilterContainer.querySelectorAll('input:checked')].map(el => el.value);
+                
+                let relevantTickets = tickets;
+                if (selectedStatuses.length > 0) {
+                    relevantTickets = tickets.filter(ticket => selectedStatuses.includes(ticket.status));
+                }
+
+                const availableTags = [...new Set(relevantTickets.flatMap(t => t.tags))].sort();
+                const tagsContainer = document.getElementById('filterTagsContainer');
+                
+                // Preserve checked state of tags that are still available
+                const currentlyCheckedTags = [...tagsContainer.querySelectorAll('input:checked')].map(el => el.value);
+
+                if (availableTags.length > 0) {
+                    tagsContainer.innerHTML = availableTags.map(tag => `<label><input type="checkbox" value="${tag}" ${currentlyCheckedTags.includes(tag) ? 'checked' : ''}> ${tag}</label>`).join('');
+                } else {
+                    tagsContainer.innerHTML = '<p style="font-size: 0.9em; color: #888;">Nenhuma tag encontrada para o status selecionado.</p>';
+                }
+            };
+
+            const populateFilterModal = () => {
+                statusFilterContainer.innerHTML = statuses.map(s => `<label><input type="checkbox" value="${s}" ${activeFilters.statuses.includes(s) ? 'checked' : ''}> ${s}</label>`).join('');
+                
+                statusFilterContainer.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+                    checkbox.addEventListener('change', updateAvailableTagsForFilter);
+                });
+
+                const priorityContainer = document.getElementById('filterPriorityContainer');
+                priorityContainer.innerHTML = priorities.map(p => `<label><input type="checkbox" value="${p}" ${activeFilters.priorities.includes(p) ? 'checked' : ''}> ${p}</label>`).join('');
+                
+                updateAvailableTagsForFilter(); // Initial population of tags
+                
+                document.getElementById('filterStartDate').value = activeFilters.startDate;
+                document.getElementById('filterEndDate').value = activeFilters.endDate;
+                document.getElementById('showCompleted').checked = activeFilters.showCompleted;
+            };
+
+            const applyFilters = () => {
+                activeFilters.statuses = [...document.querySelectorAll('#filterStatusContainer input:checked')].map(el => el.value);
+                activeFilters.priorities = [...document.querySelectorAll('#filterPriorityContainer input:checked')].map(el => el.value);
+                activeFilters.tags = [...document.querySelectorAll('#filterTagsContainer input:checked')].map(el => el.value);
+                activeFilters.startDate = document.getElementById('filterStartDate').value;
+                activeFilters.endDate = document.getElementById('filterEndDate').value;
+                activeFilters.showCompleted = document.getElementById('showCompleted').checked;
+                
+                const isAnyFilterActive = activeFilters.statuses.length > 0 || activeFilters.priorities.length > 0 || activeFilters.tags.length > 0 || activeFilters.startDate || activeFilters.endDate || !activeFilters.showCompleted;
+                filterBtn.classList.toggle('filter-active', isAnyFilterActive);
+
+                closeModal('filterModal');
+                renderBoard();
+            };
+
+            const clearFilters = () => {
+                activeFilters = { statuses: [], priorities: [], tags: [], startDate: '', endDate: '', showCompleted: true };
+                filterBtn.classList.remove('filter-active');
+                closeModal('filterModal');
+                renderBoard();
+            };
+
+            filterBtn.addEventListener('click', () => openModal('filterModal'));
+            applyFiltersBtn.addEventListener('click', applyFilters);
+            clearFiltersBtn.addEventListener('click', clearFilters);
+            filterModal.querySelector('.close-button').addEventListener('click', () => closeModal('filterModal'));
 
             loadData();
             renderBoard();
