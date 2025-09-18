@@ -1180,12 +1180,14 @@
 
             const renderSubtasksInModal = (subtasks) => {
                 subtaskListContainer.innerHTML = '';
-                subtasks.forEach(subtask => {
+                const sortedSubtasks = [...subtasks].sort((a, b) => a.completed - b.completed);
+                sortedSubtasks.forEach(subtask => {
                     const wrapper = createSubtaskEditItem(subtask);
                     if (subtask.children && subtask.children.length > 0) {
                         const subSubContainer = document.createElement('div');
                         subSubContainer.className = 'sub-subtask-container';
-                        subtask.children.forEach(child => {
+                        const sortedChildren = [...subtask.children].sort((a, b) => a.completed - b.completed);
+                        sortedChildren.forEach(child => {
                             subSubContainer.appendChild(createSubtaskEditItem(child, true, subtask.name));
                         });
                         wrapper.appendChild(subSubContainer);
@@ -1204,7 +1206,7 @@
                     newSubtaskInput.focus();
                 }
             };
-
+            
             // --- FUNÇÕES DE LÓGICA DE DADOS ---
             const loadData = () => {
                 const data = localStorage.getItem('todo-adm-tickets-v9');
@@ -1388,7 +1390,8 @@
                 const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
 
                 const renderItems = (items, isSubItem = false) => {
-                    return items.map((task, index) => {
+                    const sortedItems = [...items].sort((a, b) => a.completed - b.completed);
+                    return sortedItems.map((task, index) => {
                         const aviseiAlunoClass = task.aviseiAluno ? 'active' : '';
                         const aviseiRegianaClass = task.aviseiRegiana ? 'active' : '';
                         const childrenHTML = task.children && task.children.length > 0 ? renderItems(task.children, true) : '';
@@ -1749,7 +1752,6 @@
 
             const generateTagsForTicket = async (ticket) => {
                 if (!googleApiKey) {
-                    console.error("Chave de API do Google não definida.");
                     return;
                 }
                 
