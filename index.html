@@ -469,6 +469,9 @@
             gap: 8px;
             padding: 4px 0;
         }
+        .checklist-item-sub {
+             margin-left: 20px;
+        }
         .checklist-item label {
             flex-grow: 1;
             transition: color 0.2s, text-decoration 0.2s;
@@ -613,14 +616,14 @@
         .form-field { display: flex; flex-direction: column; }
         .form-field.full-width { grid-column: 1 / -1; }
         .form-field label { margin-bottom: 8px; font-size: 0.9em; color: #ccc; }
-        .form-field input, .form-field select, .form-field textarea {
+        .form-field input, .form-field select {
             width: 100%; padding: 10px; background-color: var(--bg-color); border: 1px solid var(--border-color);
             color: var(--font-color); border-radius: 4px; box-sizing: border-box; transition: border-color 0.2s;
         }
         #ticketTitle {
             text-transform: capitalize;
         }
-        .form-field input:focus, .form-field select:focus, .form-field textarea:focus { outline: none; border-color: var(--primary-accent); }
+        .form-field input:focus, .form-field select:focus { outline: none; border-color: var(--primary-accent); }
         .checkbox-group {
             display: flex;
             flex-direction: column;
@@ -665,6 +668,76 @@
             overflow-y: auto;
         }
         
+        /* Gerenciador de Subtarefas no Modal */
+        #subtask-manager {
+            background-color: var(--bg-color);
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+        }
+        .subtask-input-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        #newSubtaskInput {
+            flex-grow: 1;
+        }
+        #addSubtaskBtn {
+            flex-shrink: 0;
+            background-color: var(--primary-accent);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            width: 40px;
+            font-size: 20px;
+            cursor: pointer;
+        }
+        #subtaskListContainer {
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        .subtask-wrapper {
+             animation: fadeIn 0.3s;
+        }
+        .subtask-edit-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px;
+            background-color: var(--surface-color);
+            border-radius: 4px;
+            margin-bottom: 5px;
+            cursor: grab;
+        }
+        .subtask-edit-item.dragging-subtask {
+            opacity: 0.5;
+        }
+        .subtask-text {
+            flex-grow: 1;
+        }
+        .subtask-text:focus {
+            outline: 1px solid var(--primary-accent);
+            background: var(--surface-hover-color);
+        }
+        .subtask-actions button {
+            background: none;
+            border: none;
+            color: #888;
+            cursor: pointer;
+            font-size: 20px;
+            padding: 0 5px;
+        }
+         .subtask-actions button:hover {
+            color: var(--font-color);
+        }
+        .sub-subtask-container {
+            margin-left: 20px;
+            padding-left: 10px;
+            border-left: 2px solid var(--border-color);
+        }
+
+
         /* Histórico no Modal */
         .modal-extra-section {
             margin-top: 20px; max-height: 150px; overflow-y: auto; padding: 15px; background: var(--bg-color);
@@ -850,11 +923,17 @@
                         <input type="text" id="ticketPassword">
                     </div>
                     <div class="form-field full-width">
-                        <label for="ticketSubtasks">Sub-tarefas (uma por linha)</label>
-                        <textarea id="ticketSubtasks" rows="4"></textarea>
+                        <label>Sub-tarefas (Requerimentos)</label>
+                        <div id="subtask-manager">
+                            <div class="subtask-input-container">
+                                <input type="text" id="newSubtaskInput" placeholder="Adicionar um novo requerimento...">
+                                <button type="button" id="addSubtaskBtn">+</button>
+                            </div>
+                            <div id="subtaskListContainer"></div>
+                        </div>
                     </div>
                     <div class="form-field full-width">
-                        <label>Status de Comunicação</label>
+                        <label>Status de Comunicação (Geral)</label>
                         <div class="checkbox-group">
                             <label><input type="checkbox" id="ticketAviseiRegiana"> Avisei a Regiana</label>
                             <label><input type="checkbox" id="ticketComuniqueiAluno"> Comuniquei o aluno</label>
@@ -1019,6 +1098,112 @@
                 });
             };
 
+             // --- Gerenciador de Subtarefas no Modal ---
+            const newSubtaskInput = document.getElementById('newSubtaskInput');
+            const addSubtaskBtn = document.getElementById('addSubtaskBtn');
+            const subtaskListContainer = document.getElementById('subtaskListContainer');
+            let draggedSubtask = null;
+
+            const createSubtaskEditItem = (subtask, isSubSubtask = false, parentName = '') => {
+                 const wrapper = document.createElement('div');
+                 if(!isSubSubtask) wrapper.className = 'subtask-wrapper';
+
+                const item = document.createElement('div');
+                item.className = 'subtask-edit-item';
+                if (isSubSubtask) item.classList.add('sub-subtask-item');
+                item.draggable = true;
+                item.dataset.originalName = subtask.name;
+                
+                item.innerHTML = `
+                    <span class="subtask-text" contenteditable="true">${subtask.name}</span>
+                     <div class="subtask-actions">
+                        ${!isSubSubtask ? '<button type="button" class="add-sub-subtask-btn" title="Adicionar sub-requerimento">+</button>' : ''}
+                        <button type="button" class="remove-subtask-btn" title="Remover">×</button>
+                    </div>
+                `;
+                
+                if (isSubSubtask) {
+                     item.querySelector('.remove-subtask-btn').addEventListener('click', () => item.remove());
+                } else {
+                     wrapper.appendChild(item);
+                     item.querySelector('.remove-subtask-btn').addEventListener('click', () => wrapper.remove());
+                     item.querySelector('.add-sub-subtask-btn').addEventListener('click', () => {
+                        const subSubContainer = wrapper.querySelector('.sub-subtask-container') || document.createElement('div');
+                        if(!subSubContainer.classList.contains('sub-subtask-container')) {
+                            subSubContainer.className = 'sub-subtask-container';
+                            wrapper.appendChild(subSubContainer);
+                        }
+                        const newSubSubtask = createSubtaskEditItem({ name: 'Nova sub-tarefa', children:[] }, true, subtask.name);
+                        subSubContainer.appendChild(newSubSubtask);
+                        newSubSubtask.querySelector('.subtask-text').focus();
+                     });
+                }
+                
+                const elementToDrag = isSubSubtask ? item : wrapper;
+                elementToDrag.addEventListener('dragstart', (e) => {
+                    e.stopPropagation();
+                    draggedSubtask = elementToDrag;
+                    setTimeout(() => elementToDrag.classList.add('dragging-subtask'), 0);
+                });
+                elementToDrag.addEventListener('dragend', (e) => {
+                    e.stopPropagation();
+                    elementToDrag.classList.remove('dragging-subtask');
+                });
+
+                return isSubSubtask ? item : wrapper;
+            };
+
+            subtaskListContainer.addEventListener('dragover', e => {
+                e.preventDefault();
+                const dragging = document.querySelector('.dragging-subtask');
+                if(!dragging) return;
+                const afterElement = getDragAfterElement(subtaskListContainer, e.clientY);
+                if (afterElement == null) {
+                    subtaskListContainer.appendChild(dragging);
+                } else {
+                    subtaskListContainer.insertBefore(dragging, afterElement);
+                }
+            });
+
+            const getDragAfterElement = (container, y) => {
+                const draggableElements = [...container.querySelectorAll('.subtask-wrapper:not(.dragging-subtask)')];
+                return draggableElements.reduce((closest, child) => {
+                    const box = child.getBoundingClientRect();
+                    const offset = y - box.top - box.height / 2;
+                    if (offset < 0 && offset > closest.offset) {
+                        return { offset: offset, element: child };
+                    } else {
+                        return closest;
+                    }
+                }, { offset: Number.NEGATIVE_INFINITY }).element;
+            };
+
+            const renderSubtasksInModal = (subtasks) => {
+                subtaskListContainer.innerHTML = '';
+                subtasks.forEach(subtask => {
+                    const wrapper = createSubtaskEditItem(subtask);
+                    if (subtask.children && subtask.children.length > 0) {
+                        const subSubContainer = document.createElement('div');
+                        subSubContainer.className = 'sub-subtask-container';
+                        subtask.children.forEach(child => {
+                            subSubContainer.appendChild(createSubtaskEditItem(child, true, subtask.name));
+                        });
+                        wrapper.appendChild(subSubContainer);
+                    }
+                    subtaskListContainer.appendChild(wrapper);
+                });
+            };
+
+            const addNewSubtaskFromInput = () => {
+                const name = newSubtaskInput.value.trim();
+                if (name) {
+                    const subtask = { name, completed: false, aviseiAluno: false, aviseiRegiana: false, children: [] };
+                    const item = createSubtaskEditItem(subtask);
+                    subtaskListContainer.appendChild(item);
+                    newSubtaskInput.value = '';
+                    newSubtaskInput.focus();
+                }
+            };
 
             // --- FUNÇÕES DE LÓGICA DE DADOS ---
             const loadData = () => {
@@ -1037,11 +1222,12 @@
                     if (typeof normalized.requirements === 'string') {
                         normalized.subtasks = normalized.requirements.split(',')
                             .map(name => name.trim()).filter(name => name)
-                            .map(name => ({ name: name, completed: false }));
+                            .map(name => ({ name: name, completed: false, children: [] }));
                     } else if (Array.isArray(normalized.requirements)) {
                         normalized.subtasks = normalized.requirements.map(req => ({
                             name: req.name,
-                            completed: req.completed || false
+                            completed: req.completed || false,
+                            children: req.children || []
                         }));
                     }
                     delete normalized.requirements;
@@ -1054,6 +1240,10 @@
                     completed: st.completed || false,
                     aviseiAluno: st.aviseiAluno || false,
                     aviseiRegiana: st.aviseiRegiana || false,
+                    children: (st.children || []).map(child => ({
+                        name: child.name,
+                        completed: child.completed || false,
+                    }))
                 }));
 
 
@@ -1191,25 +1381,34 @@
 
             const createChecklistHTML = (subtasks, ticketId, isListView = false) => {
                 if (!subtasks || subtasks.length === 0) return null;
-
-                const sortedTasks = [...subtasks].sort((a, b) => a.completed - b.completed);
-                const completedCount = subtasks.filter(t => t.completed).length;
-                const totalCount = subtasks.length;
+                
+                const allTasks = subtasks.flatMap(st => [st, ...(st.children || [])]);
+                const completedCount = allTasks.filter(t => t.completed).length;
+                const totalCount = allTasks.length;
                 const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
 
-                const itemsHTML = sortedTasks.map((task, index) => {
-                    const aviseiAlunoClass = task.aviseiAluno ? 'active' : '';
-                    const aviseiRegianaClass = task.aviseiRegiana ? 'active' : '';
-                    return `
-                    <div class="checklist-item">
-                        <input type="checkbox" id="task-${ticketId}-${index}" data-task-name="${task.name}" ${task.completed ? 'checked' : ''}>
-                        <label for="task-${ticketId}-${index}">${task.name}</label>
-                        <div class="subtask-comms">
-                            <span class="subtask-comm-icon ${aviseiAlunoClass}" data-type="aluno" data-task-name="${task.name}" title="Avisar Aluno">A</span>
-                            <span class="subtask-comm-icon ${aviseiRegianaClass}" data-type="regiana" data-task-name="${task.name}" title="Avisar Regiana">R</span>
+                const renderItems = (items, isSubItem = false) => {
+                    return items.map((task, index) => {
+                        const aviseiAlunoClass = task.aviseiAluno ? 'active' : '';
+                        const aviseiRegianaClass = task.aviseiRegiana ? 'active' : '';
+                        const childrenHTML = task.children && task.children.length > 0 ? renderItems(task.children, true) : '';
+
+                        return `
+                        <div class="checklist-item ${isSubItem ? 'checklist-item-sub' : ''}">
+                            <input type="checkbox" id="task-${ticketId}-${task.name.replace(/\s+/g, '-')}-${index}" data-task-name="${task.name}" ${task.completed ? 'checked' : ''}>
+                            <label for="task-${ticketId}-${task.name.replace(/\s+/g, '-')}-${index}">${task.name}</label>
+                             ${!isSubItem ? `
+                            <div class="subtask-comms">
+                                <span class="subtask-comm-icon ${aviseiAlunoClass}" data-type="aluno" data-task-name="${task.name}" title="Avisar Aluno">A</span>
+                                <span class="subtask-comm-icon ${aviseiRegianaClass}" data-type="regiana" data-task-name="${task.name}" title="Avisar Regiana">R</span>
+                            </div>` : ''}
                         </div>
-                    </div>
-                `}).join('');
+                        ${childrenHTML}
+                    `}).join('');
+                };
+
+                const itemsHTML = renderItems(subtasks);
+                
 
                 const progressHTML = `
                     <div class="checklist-progress">
@@ -1224,7 +1423,7 @@
                     <div class="checklist-items">
                         ${itemsHTML}
                     </div>
-                    ${sortedTasks.length > (isListView ? 2 : 3) ? '<button class="toggle-checklist">Ver mais...</button>' : ''}
+                    ${totalCount > (isListView ? 2 : 3) ? '<button class="toggle-checklist">Ver mais...</button>' : ''}
                 `;
 
                 return { progressHTML, itemsContainerHTML };
@@ -1553,18 +1752,19 @@
                     console.error("Chave de API do Google não definida.");
                     return;
                 }
+                
+                const allPendingTasks = ticket.subtasks.flatMap(st => st.completed ? [] : [st.name, ...(st.children || []).filter(c => !c.completed).map(c => c.name)]);
 
-                const pendingSubtasks = ticket.subtasks.filter(st => !st.completed).map(st => st.name);
-                if (pendingSubtasks.length === 0) {
+                if (allPendingTasks.length === 0) {
                     ticket.tags = [];
                     return;
                 }
                 
                 const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${googleApiKey}`;
-                const subtasksText = pendingSubtasks.join(', ');
+                const subtasksText = allPendingTasks.join(', ');
                 
                 let prompt = '';
-                if (pendingSubtasks.length === 1) {
+                 if (allPendingTasks.length === 1) {
                     prompt = `A tarefa pendente é: "${subtasksText}". Crie uma única tag que resuma esta tarefa em 3 a 4 palavras. Retorne em um array JSON contendo uma única string. Exemplo: ["Preparar documentação final"]`;
                 } else {
                     prompt = `Analise esta lista de tarefas pendentes: "${subtasksText}". Identifique temas comuns e agrupe ideias semelhantes. Gere no máximo 3 tags que resumam os principais grupos de trabalho. Cada tag deve ser uma frase curta de 3 a 4 palavras. Por exemplo, se as tarefas forem "Aguardar histórico escolar" e "Aguardar certificado", uma boa tag consolidada seria "Aguardar documentação do aluno". Retorne as tags em um array JSON.`;
@@ -1748,11 +1948,7 @@
                     document.getElementById('ticketComuniqueiAluno').checked = ticket.comuniqueiAluno;
                     document.getElementById('ticketAguardandoRetorno').checked = ticket.aguardandoRetorno;
                     
-                    if (Array.isArray(ticket.subtasks)) {
-                        document.getElementById('ticketSubtasks').value = ticket.subtasks.map(r => r.name).join('\n');
-                    } else {
-                         document.getElementById('ticketSubtasks').value = '';
-                    }
+                    renderSubtasksInModal(ticket.subtasks || []);
 
                     if (ticket.history?.length > 0) renderHistoryInModal(ticket.history);
                     document.getElementById('deleteTicketBtn').style.display = 'inline-block';
@@ -1761,6 +1957,7 @@
                     document.getElementById('ticketId').value = '';
                     document.getElementById('ticketStartDate').value = new Date().toISOString().split('T')[0];
                     document.getElementById('deleteTicketBtn').style.display = 'none';
+                    renderSubtasksInModal([]);
                 }
             };
             
@@ -1796,17 +1993,28 @@
                 
                 const originalTicket = id ? { ...tickets.find(t => t.id === id) } : null;
                 
-                const newSubtasksString = document.getElementById('ticketSubtasks').value.trim();
-                const newSubtasksNames = newSubtasksString.split('\n').map(name => name.trim()).filter(name => name);
-                
-                const newSubtasks = newSubtasksNames.map(name => {
-                    const existingTask = originalTicket?.subtasks.find(r => r.name === name);
-                    return { 
-                        name: name, 
-                        completed: existingTask ? existingTask.completed : false,
-                        aviseiAluno: existingTask ? existingTask.aviseiAluno : false,
-                        aviseiRegiana: existingTask ? existingTask.aviseiRegiana : false,
-                    };
+                const subtasksFromModal = [];
+                document.querySelectorAll('#subtaskListContainer > .subtask-wrapper').forEach(wrapper => {
+                     const mainItem = wrapper.querySelector('.subtask-edit-item');
+                     const originalName = mainItem.dataset.originalName;
+                     const existingTask = originalTicket?.subtasks.find(st => st.name === originalName);
+                     const newSubtask = {
+                         name: mainItem.querySelector('.subtask-text').textContent,
+                         completed: existingTask ? existingTask.completed : false,
+                         aviseiAluno: existingTask ? existingTask.aviseiAluno : false,
+                         aviseiRegiana: existingTask ? existingTask.aviseiRegiana : false,
+                         children: []
+                     };
+
+                     wrapper.querySelectorAll('.sub-subtask-container .subtask-edit-item').forEach(childItem => {
+                         const childOriginalName = childItem.dataset.originalName;
+                         const existingChild = existingTask?.children.find(c => c.name === childOriginalName);
+                         newSubtask.children.push({
+                            name: childItem.querySelector('.subtask-text').textContent,
+                            completed: existingChild ? existingChild.completed : false,
+                         });
+                     });
+                     subtasksFromModal.push(newSubtask);
                 });
 
                 const ticketData = {
@@ -1818,7 +2026,7 @@
                     priority: document.getElementById('ticketPriority').value,
                     user: document.getElementById('ticketUser').value.trim(),
                     password: document.getElementById('ticketPassword').value.trim(),
-                    subtasks: newSubtasks,
+                    subtasks: subtasksFromModal,
                     aviseiRegiana: document.getElementById('ticketAviseiRegiana').checked,
                     comuniqueiAluno: document.getElementById('ticketComuniqueiAluno').checked,
                     aguardandoRetorno: document.getElementById('ticketAguardandoRetorno').checked,
@@ -1837,8 +2045,9 @@
                     ticketData.completionDate = originalTicket?.completionDate || null;
                 }
 
-
-                await generateTagsForTicket(ticketData);
+                if(googleApiKey) {
+                    await generateTagsForTicket(ticketData);
+                }
 
                 if (id) {
                     const index = tickets.findIndex(t => t.id === id);
@@ -1962,15 +2171,31 @@
             const handleSubtaskCheck = async (ticketId, taskName, isChecked) => {
                 const ticket = tickets.find(t => t.id === ticketId);
                 if (!ticket) return;
+                
+                let task = null;
+                for(const st of ticket.subtasks) {
+                    if (st.name === taskName) {
+                        task = st;
+                        break;
+                    }
+                    if (st.children) {
+                        const childTask = st.children.find(c => c.name === taskName);
+                        if(childTask) {
+                            task = childTask;
+                            break;
+                        }
+                    }
+                }
 
-                const task = ticket.subtasks.find(r => r.name === taskName);
                 if (!task) return;
 
                 task.completed = isChecked;
-                addLogEntry(ticket, `Sub-tarefa "${taskName}" marcada como ${task.completed ? 'concluída' : 'pendente'}.`);
+                addLogEntry(ticket, `Sub-tarefa "${task.name}" marcada como ${task.completed ? 'concluída' : 'pendente'}.`);
                 updateLastSeenTimestamp(ticket);
                 
-                await generateTagsForTicket(ticket); // Atualiza as tags
+                if (googleApiKey) {
+                    await generateTagsForTicket(ticket); // Atualiza as tags
+                }
                 saveData();
 
                 const currentElement = document.querySelector(`.ticket-card[data-id="${ticketId}"], .ticket-row[data-id="${ticketId}"]`);
