@@ -272,6 +272,23 @@
             justify-content: space-between;
             align-items: center;
         }
+        
+        .column-header-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .column-expand-btn {
+            cursor: pointer;
+            color: #888;
+            font-size: 1.2em;
+            transition: color 0.2s;
+            line-height: 1;
+        }
+        .column-expand-btn:hover {
+            color: var(--primary-accent);
+        }
+
 
         .ticket-count {
             background-color: var(--surface-hover-color);
@@ -1109,8 +1126,6 @@
                     modal.style.display = 'block';
                 });
             };
-
-
             // --- FUNÇÕES DE LÓGICA DE DADOS ---
             const loadData = () => {
                 const data = localStorage.getItem('todo-adm-tickets-v9');
@@ -1248,7 +1263,12 @@
                     column.innerHTML = `
                         <div class="column-header">
                             <span>${status}</span>
-                            <span class="ticket-count">${ticketsInColumn.length}</span>
+                            <div class="column-header-actions">
+                                <span class="column-expand-btn" data-action="expandPending" title="Expandir Pendentes">⊙</span>
+                                <span class="column-expand-btn" data-action="expandAll" title="Expandir Todos">⊕</span>
+                                <span class="column-expand-btn" data-action="collapseAll" title="Recolher Todos">⊖</span>
+                                <span class="ticket-count">${ticketsInColumn.length}</span>
+                            </div>
                         </div>
                         <div class="tickets-container"></div>
                     `;
@@ -2451,6 +2471,15 @@
             document.getElementById('exportSelect').addEventListener('change', e => { if (e.target.value) { handleExport(e.target.value); e.target.value = ''; } });
 
             kanbanBoard.addEventListener('click', (e) => {
+                const expandBtn = e.target.closest('.column-expand-btn');
+                if (expandBtn) {
+                    e.stopPropagation();
+                    const column = expandBtn.closest('.status-column');
+                    const action = expandBtn.dataset.action;
+                    handleColumnExpandCollapse(column, action);
+                    return;
+                }
+                
                 const commTarget = e.target.closest('.subtask-comm-icon');
                 if (commTarget) {
                     e.stopPropagation();
@@ -2564,13 +2593,13 @@
                 closeModal('filterModal');
                 renderBoard();
             };
+            
+            const handleColumnExpandCollapse = (column, mode) => {
+                const cardsInColumn = column.querySelectorAll('.ticket-card');
 
-            const handleExpandCollapse = (mode) => {
-                const allCardsAndRows = document.querySelectorAll('.ticket-card, .ticket-row');
-
-                allCardsAndRows.forEach(element => {
-                    const checklistContainer = element.querySelector('.checklist-items');
-                    const toggleBtn = element.querySelector('.toggle-checklist');
+                cardsInColumn.forEach(card => {
+                    const checklistContainer = card.querySelector('.checklist-items');
+                    const toggleBtn = card.querySelector('.toggle-checklist');
                     if (!checklistContainer || !toggleBtn) return;
 
                     let shouldExpand = false;
@@ -2580,15 +2609,12 @@
                     } else if (mode === 'collapseAll') {
                         shouldExpand = false;
                     } else if (mode === 'expandPending') {
-                        const ticketId = element.dataset.id;
+                        const ticketId = card.dataset.id;
                         const ticket = tickets.find(t => t.id === ticketId);
                         if (ticket) {
                             const allTasks = ticket.subtasks.flatMap(st => [st, ...(st.children || [])]);
-                            const completedCount = allTasks.filter(t => t.completed).length;
-                            const totalCount = allTasks.length;
-                            if (totalCount > completedCount) {
-                                shouldExpand = true;
-                            }
+                            const isPending = allTasks.some(t => !t.completed);
+                            shouldExpand = isPending; // Expand ONLY if pending
                         }
                     }
 
