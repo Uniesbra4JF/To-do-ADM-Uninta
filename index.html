@@ -842,6 +842,15 @@
         </div>
         <div class="header-right">
              <button id="filterBtn" class="menu-button">Filtros 🔍</button>
+             <div class="dropdown">
+                <button class="menu-button dropdown-toggle">Expandir ▾</button>
+                <div class="dropdown-content">
+                    <button id="expandAllBtn" class="dropdown-item">Tudo (Concluídos e Pendentes)</button>
+                    <button id="expandPendingBtn" class="dropdown-item">Somente Pendentes</button>
+                    <hr style="margin: 0; border-color: var(--border-color);">
+                    <button id="collapseAllBtn" class="dropdown-item">Recolher Tudo</button>
+                </div>
+            </div>
             <div class="menu-item">
                 <label title="Ordenar por Prioridade" style="font-size: 1.5em; cursor: pointer; display: flex; align-items: center;">
                     <input type="checkbox" id="prioritySortToggle" style="display: none;"> ⇅
@@ -1026,6 +1035,9 @@
             const archiveTasksBtn = document.getElementById('archiveTasksBtn');
             const showArchivedToggle = document.getElementById('showArchivedToggle');
             const filterBtn = document.getElementById('filterBtn');
+            const expandAllBtn = document.getElementById('expandAllBtn');
+            const expandPendingBtn = document.getElementById('expandPendingBtn');
+            const collapseAllBtn = document.getElementById('collapseAllBtn');
 
 
             let tickets = [];
@@ -1098,115 +1110,7 @@
                 });
             };
 
-             // --- Gerenciador de Subtarefas no Modal ---
-            const newSubtaskInput = document.getElementById('newSubtaskInput');
-            const addSubtaskBtn = document.getElementById('addSubtaskBtn');
-            const subtaskListContainer = document.getElementById('subtaskListContainer');
-            let draggedSubtask = null;
 
-            const createSubtaskEditItem = (subtask, isSubSubtask = false, parentName = '') => {
-                 const wrapper = document.createElement('div');
-                 if(!isSubSubtask) wrapper.className = 'subtask-wrapper';
-
-                const item = document.createElement('div');
-                item.className = 'subtask-edit-item';
-                if (isSubSubtask) item.classList.add('sub-subtask-item');
-                item.draggable = true;
-                item.dataset.originalName = subtask.name;
-                
-                item.innerHTML = `
-                    <span class="subtask-text" contenteditable="true">${subtask.name}</span>
-                     <div class="subtask-actions">
-                        ${!isSubSubtask ? '<button type="button" class="add-sub-subtask-btn" title="Adicionar sub-requerimento">+</button>' : ''}
-                        <button type="button" class="remove-subtask-btn" title="Remover">×</button>
-                    </div>
-                `;
-                
-                if (isSubSubtask) {
-                     item.querySelector('.remove-subtask-btn').addEventListener('click', () => item.remove());
-                } else {
-                     wrapper.appendChild(item);
-                     item.querySelector('.remove-subtask-btn').addEventListener('click', () => wrapper.remove());
-                     item.querySelector('.add-sub-subtask-btn').addEventListener('click', () => {
-                        const subSubContainer = wrapper.querySelector('.sub-subtask-container') || document.createElement('div');
-                        if(!subSubContainer.classList.contains('sub-subtask-container')) {
-                            subSubContainer.className = 'sub-subtask-container';
-                            wrapper.appendChild(subSubContainer);
-                        }
-                        const newSubSubtask = createSubtaskEditItem({ name: 'Nova sub-tarefa', children:[] }, true, subtask.name);
-                        subSubContainer.appendChild(newSubSubtask);
-                        newSubSubtask.querySelector('.subtask-text').focus();
-                     });
-                }
-                
-                const elementToDrag = isSubSubtask ? item : wrapper;
-                elementToDrag.addEventListener('dragstart', (e) => {
-                    e.stopPropagation();
-                    draggedSubtask = elementToDrag;
-                    setTimeout(() => elementToDrag.classList.add('dragging-subtask'), 0);
-                });
-                elementToDrag.addEventListener('dragend', (e) => {
-                    e.stopPropagation();
-                    elementToDrag.classList.remove('dragging-subtask');
-                });
-
-                return isSubSubtask ? item : wrapper;
-            };
-
-            subtaskListContainer.addEventListener('dragover', e => {
-                e.preventDefault();
-                const dragging = document.querySelector('.dragging-subtask');
-                if(!dragging) return;
-                const afterElement = getDragAfterElement(subtaskListContainer, e.clientY);
-                if (afterElement == null) {
-                    subtaskListContainer.appendChild(dragging);
-                } else {
-                    subtaskListContainer.insertBefore(dragging, afterElement);
-                }
-            });
-
-            const getDragAfterElement = (container, y) => {
-                const draggableElements = [...container.querySelectorAll('.subtask-wrapper:not(.dragging-subtask)')];
-                return draggableElements.reduce((closest, child) => {
-                    const box = child.getBoundingClientRect();
-                    const offset = y - box.top - box.height / 2;
-                    if (offset < 0 && offset > closest.offset) {
-                        return { offset: offset, element: child };
-                    } else {
-                        return closest;
-                    }
-                }, { offset: Number.NEGATIVE_INFINITY }).element;
-            };
-
-            const renderSubtasksInModal = (subtasks) => {
-                subtaskListContainer.innerHTML = '';
-                const sortedSubtasks = [...subtasks].sort((a, b) => a.completed - b.completed);
-                sortedSubtasks.forEach(subtask => {
-                    const wrapper = createSubtaskEditItem(subtask);
-                    if (subtask.children && subtask.children.length > 0) {
-                        const subSubContainer = document.createElement('div');
-                        subSubContainer.className = 'sub-subtask-container';
-                        const sortedChildren = [...subtask.children].sort((a, b) => a.completed - b.completed);
-                        sortedChildren.forEach(child => {
-                            subSubContainer.appendChild(createSubtaskEditItem(child, true, subtask.name));
-                        });
-                        wrapper.appendChild(subSubContainer);
-                    }
-                    subtaskListContainer.appendChild(wrapper);
-                });
-            };
-
-            const addNewSubtaskFromInput = () => {
-                const name = newSubtaskInput.value.trim();
-                if (name) {
-                    const subtask = { name, completed: false, aviseiAluno: false, aviseiRegiana: false, children: [] };
-                    const item = createSubtaskEditItem(subtask);
-                    subtaskListContainer.appendChild(item);
-                    newSubtaskInput.value = '';
-                    newSubtaskInput.focus();
-                }
-            };
-            
             // --- FUNÇÕES DE LÓGICA DE DADOS ---
             const loadData = () => {
                 const data = localStorage.getItem('todo-adm-tickets-v9');
@@ -1390,8 +1294,7 @@
                 const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
 
                 const renderItems = (items, isSubItem = false) => {
-                    const sortedItems = [...items].sort((a, b) => a.completed - b.completed);
-                    return sortedItems.map((task, index) => {
+                    return [...items].sort((a, b) => a.completed - b.completed).map((task, index) => {
                         const aviseiAlunoClass = task.aviseiAluno ? 'active' : '';
                         const aviseiRegianaClass = task.aviseiRegiana ? 'active' : '';
                         const childrenHTML = task.children && task.children.length > 0 ? renderItems(task.children, true) : '';
@@ -2484,6 +2387,9 @@
             archiveTasksBtn.addEventListener('click', archiveOldTasks);
             showArchivedToggle.addEventListener('change', renderBoard);
             smartFocusBtn.addEventListener('click', handleSmartFocus);
+            expandAllBtn.addEventListener('click', () => handleExpandCollapse('expandAll'));
+            expandPendingBtn.addEventListener('click', () => handleExpandCollapse('expandPending'));
+            collapseAllBtn.addEventListener('click', () => handleExpandCollapse('collapseAll'));
 
 
             generateTagsBtn.addEventListener('click', async () => {
@@ -2657,6 +2563,38 @@
                 filterBtn.classList.remove('filter-active');
                 closeModal('filterModal');
                 renderBoard();
+            };
+
+            const handleExpandCollapse = (mode) => {
+                const allCardsAndRows = document.querySelectorAll('.ticket-card, .ticket-row');
+
+                allCardsAndRows.forEach(element => {
+                    const checklistContainer = element.querySelector('.checklist-items');
+                    const toggleBtn = element.querySelector('.toggle-checklist');
+                    if (!checklistContainer || !toggleBtn) return;
+
+                    let shouldExpand = false;
+
+                    if (mode === 'expandAll') {
+                        shouldExpand = true;
+                    } else if (mode === 'collapseAll') {
+                        shouldExpand = false;
+                    } else if (mode === 'expandPending') {
+                        const ticketId = element.dataset.id;
+                        const ticket = tickets.find(t => t.id === ticketId);
+                        if (ticket) {
+                            const allTasks = ticket.subtasks.flatMap(st => [st, ...(st.children || [])]);
+                            const completedCount = allTasks.filter(t => t.completed).length;
+                            const totalCount = allTasks.length;
+                            if (totalCount > completedCount) {
+                                shouldExpand = true;
+                            }
+                        }
+                    }
+
+                    checklistContainer.classList.toggle('expanded', shouldExpand);
+                    toggleBtn.textContent = shouldExpand ? 'Ver menos' : 'Ver mais...';
+                });
             };
 
             filterBtn.addEventListener('click', () => openModal('filterModal'));
